@@ -490,95 +490,118 @@ function generateRecommendations(data, score) {
 
   // SSL
   if (!data.ssl?.valid) {
-    recs.push({ priority: 'critique', category: 'Sécurité', action: 'Installer un certificat SSL (HTTPS)', impact: 'Très élevé', difficulty: 'Facile' });
+    recs.push({ priority: 'critique', category: 'Sécurité', action: 'Installer un certificat SSL (HTTPS)', impact: 'Très élevé', difficulty: 'Facile',
+      solution: '1. Contactez votre hébergeur (OVH, Ionos, o2switch…) et demandez un certificat SSL gratuit Let\'s Encrypt — la plupart le proposent en 1 clic dans le panneau d\'administration.\n2. Si votre hébergeur ne le propose pas, utilisez Cloudflare (gratuit) : créez un compte, ajoutez votre domaine, et activez "Always Use HTTPS".\n3. Une fois HTTPS actif, ajoutez une redirection 301 de http:// vers https:// dans votre fichier .htaccess ou via votre hébergeur.\n4. Vérifiez que toutes les ressources (images, scripts, CSS) utilisent aussi https://.\n5. Résultat attendu : le cadenas vert apparaît dans la barre d\'adresse → confiance des visiteurs + meilleur référencement Google.' });
   } else if (data.ssl?.daysLeft < 30) {
-    recs.push({ priority: 'urgent', category: 'Sécurité', action: `Renouveler le certificat SSL — expire dans ${data.ssl.daysLeft} jours`, impact: 'Élevé', difficulty: 'Facile' });
+    recs.push({ priority: 'urgent', category: 'Sécurité', action: `Renouveler le certificat SSL — expire dans ${data.ssl.daysLeft} jours`, impact: 'Élevé', difficulty: 'Facile',
+      solution: `1. Connectez-vous au panneau d'administration de votre hébergeur.\n2. Allez dans la section "Certificats SSL" ou "Sécurité".\n3. Cliquez sur "Renouveler" ou "Regénérer le certificat". Avec Let's Encrypt, c'est souvent automatique — vérifiez que le renouvellement auto est bien activé.\n4. Si le renouvellement échoue, supprimez l'ancien certificat et recréez-en un nouveau.\n5. Testez sur https://www.ssllabs.com/ssltest/ pour confirmer que tout est OK.\n6. ⚠️ Un certificat expiré affiche un avertissement "Site non sécurisé" qui fait fuir 90% des visiteurs.` });
   }
 
   // SEO
   const seo = data.seo || {};
   if (!seo.title) {
-    recs.push({ priority: 'élevé', category: 'SEO', action: 'Ajouter une balise <title> à la page d\'accueil', impact: 'Élevé', difficulty: 'Facile' });
+    recs.push({ priority: 'élevé', category: 'SEO', action: 'Ajouter une balise <title> à la page d\'accueil', impact: 'Élevé', difficulty: 'Facile',
+      solution: '1. La balise <title> est le texte qui apparaît dans l\'onglet du navigateur ET dans les résultats Google. C\'est le critère SEO #1.\n2. Si vous utilisez WordPress : allez dans Réglages → Général → Titre du site. Ou mieux, installez le plugin Yoast SEO (gratuit) et remplissez le champ "Titre SEO".\n3. Format idéal : "[Votre activité] à [Ville] — [Nom de votre entreprise]". Exemple : "Plombier à Lyon — Martin Plomberie".\n4. Longueur idéale : entre 30 et 60 caractères.\n5. Si vous n\'utilisez pas WordPress, demandez à votre développeur d\'ajouter <title>Votre titre ici</title> dans la section <head> de votre page.\n6. Résultat attendu : meilleur positionnement Google + plus de clics depuis les résultats de recherche.' });
   } else if (seo.title.length < 20 || seo.title.length > 70) {
-    recs.push({ priority: 'moyen', category: 'SEO', action: `Optimiser le titre (actuellement ${seo.title.length} caractères, idéal : 20-70)`, impact: 'Moyen', difficulty: 'Facile' });
+    recs.push({ priority: 'moyen', category: 'SEO', action: `Optimiser le titre (actuellement ${seo.title.length} caractères, idéal : 20-70)`, impact: 'Moyen', difficulty: 'Facile',
+      solution: `1. Votre titre actuel fait ${seo.title.length} caractères. Google affiche environ 60 caractères max dans ses résultats.\n2. ${seo.title.length < 20 ? 'Votre titre est trop court — il ne décrit pas assez votre activité. Ajoutez votre métier, votre ville, et votre nom d\'entreprise.' : 'Votre titre est trop long — Google va le couper. Raccourcissez-le en gardant l\'essentiel : votre activité principale + votre ville.'}\n3. Format recommandé : "[Activité] à [Ville] | [Nom entreprise]".\n4. Si WordPress : modifiez via Yoast SEO → Titre SEO. Sinon, demandez à votre développeur.\n5. Astuce : incluez le mot-clé que vos clients tapent dans Google (ex: "plombier Lyon", "restaurant italien Marseille").` });
   }
 
   if (!seo.description) {
-    recs.push({ priority: 'élevé', category: 'SEO', action: 'Ajouter une méta description pour améliorer le taux de clic dans Google', impact: 'Élevé', difficulty: 'Facile' });
+    recs.push({ priority: 'élevé', category: 'SEO', action: 'Ajouter une méta description', impact: 'Élevé', difficulty: 'Facile',
+      solution: '1. La méta description est le petit texte qui apparaît sous le titre dans les résultats Google. Sans elle, Google affiche un extrait aléatoire de votre page — souvent pas pertinent.\n2. Si WordPress : installez Yoast SEO (gratuit), puis éditez votre page d\'accueil → tout en bas, remplissez le champ "Méta description".\n3. Longueur idéale : entre 120 et 155 caractères.\n4. Ce qu\'il faut y mettre : décrivez ce que vous faites + pour qui + votre avantage (ex: "Plombier à Paris depuis 15 ans. Intervention en 1h, devis gratuit. Dépannage, installation, entretien. Appelez le 01 XX XX XX XX").\n5. Si pas WordPress : demandez à votre développeur d\'ajouter <meta name="description" content="Votre texte ici"> dans le <head> de votre page.\n6. Résultat attendu : +20 à +30% de clics depuis Google. C\'est gratuit et ça prend 5 minutes.' });
   } else if (seo.description.length < 50 || seo.description.length > 160) {
-    recs.push({ priority: 'moyen', category: 'SEO', action: `Optimiser la méta description (actuellement ${seo.description.length} caractères, idéal : 50-160)`, impact: 'Moyen', difficulty: 'Facile' });
+    recs.push({ priority: 'moyen', category: 'SEO', action: `Optimiser la méta description (actuellement ${seo.description.length} caractères, idéal : 50-160)`, impact: 'Moyen', difficulty: 'Facile',
+      solution: `1. Votre méta description fait ${seo.description.length} caractères. ${seo.description.length < 50 ? 'C\'est trop court — Google risque de l\'ignorer et d\'afficher un texte aléatoire.' : 'C\'est trop long — Google va la couper. Les mots importants à la fin seront invisibles.'}\n2. Longueur idéale : 120-155 caractères.\n3. Incluez : votre activité + votre zone géographique + un appel à l'action ("Contactez-nous", "Devis gratuit").\n4. Modifiez via Yoast SEO (WordPress) ou demandez à votre développeur de mettre à jour la balise <meta name="description">.` });
   }
 
   if (!seo.h1 || seo.h1.length === 0) {
-    recs.push({ priority: 'élevé', category: 'SEO', action: 'Ajouter une balise H1 contenant le mot-clé principal de la page', impact: 'Élevé', difficulty: 'Facile' });
+    recs.push({ priority: 'élevé', category: 'SEO', action: 'Ajouter une balise H1 contenant le mot-clé principal', impact: 'Élevé', difficulty: 'Facile',
+      solution: '1. La balise H1 est le titre principal visible sur votre page. Google l\'utilise pour comprendre de quoi parle votre page.\n2. Chaque page doit avoir exactement 1 balise H1, contenant votre mot-clé principal.\n3. Exemple pour un plombier : <h1>Plombier à Paris — Intervention rapide 7j/7</h1>.\n4. Si WordPress : éditez votre page d\'accueil, le titre principal que vous voyez est généralement le H1.\n5. Ne confondez pas avec le titre du site (balise <title>) — le H1 est le gros titre visible SUR la page.\n6. Résultat attendu : Google comprend mieux votre activité → meilleur positionnement sur vos mots-clés.' });
   } else if (seo.h1.length > 1) {
-    recs.push({ priority: 'moyen', category: 'SEO', action: `Réduire à un seul H1 (${seo.h1.length} trouvés actuellement)`, impact: 'Moyen', difficulty: 'Facile' });
+    recs.push({ priority: 'moyen', category: 'SEO', action: `Réduire à un seul H1 (${seo.h1.length} trouvés actuellement)`, impact: 'Moyen', difficulty: 'Facile',
+      solution: `1. Votre page a ${seo.h1.length} balises H1 : ${seo.h1.map(h => '"' + h + '"').join(', ')}.\n2. Google s'attend à un seul H1 par page — avoir plusieurs H1 dilue le signal SEO.\n3. Gardez le H1 le plus pertinent (celui qui décrit le mieux votre activité) et transformez les autres en H2 ou H3.\n4. Si WordPress : éditez votre page, vérifiez les blocs "Titre" et changez leur niveau de H1 à H2.\n5. Demandez à votre développeur de remplacer les <h1> supplémentaires par des <h2>.` });
   }
 
   if (seo.images?.withoutAlt > 0) {
-    recs.push({ priority: 'moyen', category: 'SEO', action: `Ajouter des attributs alt aux ${seo.images.withoutAlt} image(s) sans description`, impact: 'Moyen', difficulty: 'Facile' });
+    recs.push({ priority: 'moyen', category: 'SEO', action: `Ajouter des attributs alt aux ${seo.images.withoutAlt} image(s) sans description`, impact: 'Moyen', difficulty: 'Facile',
+      solution: `1. ${seo.images.withoutAlt} image(s) sur votre site n'ont pas de texte alternatif (attribut "alt"). Google ne peut pas "voir" ces images.\n2. L'attribut alt décrit l'image en texte. Exemple : alt="Plombier réparant un robinet à Paris".\n3. Si WordPress : éditez votre page → cliquez sur chaque image → remplissez le champ "Texte alternatif" à droite.\n4. Décrivez ce qu'on voit sur l'image + incluez un mot-clé naturellement si possible.\n5. C'est aussi important pour l'accessibilité (personnes malvoyantes utilisant un lecteur d'écran).\n6. Résultat attendu : vos images apparaissent dans Google Images → source de trafic supplémentaire gratuite.` });
   }
 
   if (!seo.canonical) {
-    recs.push({ priority: 'moyen', category: 'SEO', action: 'Ajouter une balise canonical pour éviter le contenu dupliqué', impact: 'Moyen', difficulty: 'Facile' });
+    recs.push({ priority: 'moyen', category: 'SEO', action: 'Ajouter une balise canonical', impact: 'Moyen', difficulty: 'Facile',
+      solution: '1. La balise canonical indique à Google quelle est la "vraie" URL de votre page. Sans elle, Google peut indexer des doublons (avec/sans www, avec/sans slash final, etc.).\n2. Ajoutez dans le <head> : <link rel="canonical" href="https://www.votresite.fr/" />\n3. Si WordPress : Yoast SEO gère ça automatiquement — vérifiez qu\'il est bien installé et activé.\n4. Résultat : Google concentre la puissance SEO sur une seule URL au lieu de la diluer entre plusieurs versions.' });
   }
 
   if (!seo.lang) {
-    recs.push({ priority: 'faible', category: 'SEO', action: 'Ajouter l\'attribut lang="fr" à la balise <html>', impact: 'Faible', difficulty: 'Très facile' });
+    recs.push({ priority: 'faible', category: 'SEO', action: 'Ajouter l\'attribut lang="fr" à la balise <html>', impact: 'Faible', difficulty: 'Très facile',
+      solution: '1. Ajoutez lang="fr" à votre balise HTML : <html lang="fr">.\n2. Ça aide Google à comprendre que votre site est en français et à le proposer aux utilisateurs francophones.\n3. Si WordPress : c\'est normalement automatique. Vérifiez dans Réglages → Général → Langue du site → Français.\n4. Sinon, demandez à votre développeur — c\'est une modification d\'une seconde.' });
   }
 
   // Structured data
   if (!seo.structuredData || seo.structuredData.length === 0) {
-    recs.push({ priority: 'moyen', category: 'SEO', action: 'Ajouter des données structurées schema.org (LocalBusiness, Organization, etc.)', impact: 'Élevé', difficulty: 'Moyen' });
+    recs.push({ priority: 'moyen', category: 'SEO', action: 'Ajouter des données structurées schema.org', impact: 'Élevé', difficulty: 'Moyen',
+      solution: '1. Les données structurées permettent à Google d\'afficher des infos enrichies dans les résultats (étoiles, horaires, adresse, téléphone, prix…).\n2. Pour un commerce local, utilisez le type "LocalBusiness" : https://schema.org/LocalBusiness\n3. Solution simple : allez sur https://technicalseo.com/tools/schema-markup-generator/, remplissez vos infos, copiez le code JSON-LD généré.\n4. Collez ce code juste avant </head> dans votre page.\n5. Si WordPress : installez le plugin "Schema Pro" ou utilisez Yoast SEO Premium qui gère les données structurées.\n6. Testez sur https://search.google.com/test/rich-results pour vérifier que c\'est correct.\n7. Résultat attendu : votre fiche dans Google affiche vos horaires, téléphone, avis → plus de clics.' });
   }
 
   // Open Graph
   if (!seo.og?.image) {
-    recs.push({ priority: 'moyen', category: 'Réseaux sociaux', action: 'Ajouter une image Open Graph pour les partages sur les réseaux sociaux', impact: 'Moyen', difficulty: 'Facile' });
+    recs.push({ priority: 'moyen', category: 'Réseaux sociaux', action: 'Ajouter une image Open Graph pour les partages sociaux', impact: 'Moyen', difficulty: 'Facile',
+      solution: '1. Quand quelqu\'un partage votre site sur Facebook, LinkedIn ou WhatsApp, l\'image Open Graph est celle qui s\'affiche.\n2. Sans image, le partage apparaît sans visuel → personne ne clique dessus.\n3. Créez une image de 1200x630 pixels (utilisez Canva gratuitement) avec votre logo, votre activité et votre ville.\n4. Ajoutez dans le <head> : <meta property="og:image" content="https://votresite.fr/image.jpg" />\n5. Si WordPress : Yoast SEO → éditez votre page → onglet "Réseaux sociaux" → uploadez votre image.\n6. Testez sur https://developers.facebook.com/tools/debug/ pour vérifier l\'aperçu.\n7. Résultat : vos partages sur les réseaux sociaux sont visuels et attirent des clics.' });
   }
 
   // Security headers
   const sec = data.securityHeaders?.checks || {};
   if (!sec.strictTransportSecurity) {
-    recs.push({ priority: 'moyen', category: 'Sécurité', action: 'Activer l\'en-tête HSTS (Strict-Transport-Security)', impact: 'Moyen', difficulty: 'Moyen' });
+    recs.push({ priority: 'moyen', category: 'Sécurité', action: 'Activer l\'en-tête HSTS (Strict-Transport-Security)', impact: 'Moyen', difficulty: 'Moyen',
+      solution: '1. HSTS force les navigateurs à toujours utiliser HTTPS sur votre site, même si quelqu\'un tape http://.\n2. Ajoutez cet en-tête à votre serveur : Strict-Transport-Security: max-age=31536000; includeSubDomains\n3. Sur Apache (.htaccess) : Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"\n4. Sur Nginx : add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n5. Si vous utilisez Cloudflare : allez dans SSL/TLS → Edge Certificates → activez "Always Use HTTPS" et "HSTS".\n6. ⚠️ Assurez-vous que HTTPS fonctionne parfaitement AVANT d\'activer HSTS.' });
   }
   if (!sec.contentSecurityPolicy) {
-    recs.push({ priority: 'faible', category: 'Sécurité', action: 'Définir une Content Security Policy (CSP)', impact: 'Élevé', difficulty: 'Difficile' });
+    recs.push({ priority: 'faible', category: 'Sécurité', action: 'Définir une Content Security Policy (CSP)', impact: 'Élevé', difficulty: 'Difficile',
+      solution: '1. La CSP protège votre site contre les injections de code malveillant (XSS).\n2. C\'est un en-tête avancé — si vous n\'avez pas de développeur, passez cette étape pour l\'instant.\n3. Commencez par un mode "report-only" pour ne rien casser : Content-Security-Policy-Report-Only: default-src \'self\'\n4. Outil utile : https://report-uri.com/home/generate pour générer une CSP adaptée à votre site.\n5. À faire faire par un développeur web si possible.' });
   }
   if (!sec.xFrameOptions) {
-    recs.push({ priority: 'moyen', category: 'Sécurité', action: 'Ajouter l\'en-tête X-Frame-Options pour prévenir le clickjacking', impact: 'Moyen', difficulty: 'Facile' });
+    recs.push({ priority: 'moyen', category: 'Sécurité', action: 'Ajouter l\'en-tête X-Frame-Options', impact: 'Moyen', difficulty: 'Facile',
+      solution: '1. Cet en-tête empêche d\'autres sites d\'intégrer votre site dans un cadre (iframe) — protection contre le "clickjacking".\n2. Sur Apache (.htaccess) : Header always set X-Frame-Options "SAMEORIGIN"\n3. Sur Nginx : add_header X-Frame-Options "SAMEORIGIN" always;\n4. Si WordPress : ajoutez cette ligne dans votre fichier .htaccess à la racine du site.\n5. Si Cloudflare : allez dans Rules → Transform Rules → ajoutez un Response Header "X-Frame-Options: SAMEORIGIN".' });
   }
 
-  // Performance (only if PageSpeed API returned real data)
+  // Performance
   const perfMobile = data.pageSpeed?.mobile;
   const perfApiAvail = perfMobile && perfMobile.fcp !== 'N/A';
   if (perfApiAvail) {
     const perf = perfMobile.performance;
     if (perf < 50) {
-      recs.push({ priority: 'élevé', category: 'Performance', action: 'Optimiser les performances mobiles (score actuel : ' + perf + '/100)', impact: 'Très élevé', difficulty: 'Difficile' });
+      recs.push({ priority: 'élevé', category: 'Performance', action: 'Optimiser les performances mobiles (score actuel : ' + perf + '/100)', impact: 'Très élevé', difficulty: 'Difficile',
+        solution: '1. Votre site est LENT sur mobile — 53% des visiteurs quittent un site qui met plus de 3 secondes à charger.\n2. Actions immédiates :\n   a) Compressez vos images : utilisez https://squoosh.app/ (gratuit) pour réduire leur taille de 50-80%.\n   b) Activez la mise en cache : ajoutez des en-têtes Cache-Control sur votre hébergeur.\n   c) Activez la compression GZIP dans votre hébergeur ou .htaccess.\n3. Si WordPress : installez WP Rocket (payant mais excellent) ou LiteSpeed Cache (gratuit).\n4. Supprimez les plugins inutiles — chacun ralentit le site.\n5. Testez avant/après sur https://pagespeed.web.dev pour mesurer l\'amélioration.\n6. Résultat attendu : un site rapide retient les visiteurs et Google le favorise dans les résultats.' });
     } else if (perf < 70) {
-      recs.push({ priority: 'moyen', category: 'Performance', action: 'Améliorer la vitesse de chargement mobile (score : ' + perf + '/100)', impact: 'Élevé', difficulty: 'Moyen' });
+      recs.push({ priority: 'moyen', category: 'Performance', action: 'Améliorer la vitesse de chargement mobile (score : ' + perf + '/100)', impact: 'Élevé', difficulty: 'Moyen',
+        solution: '1. Votre score de performance est correct mais peut être amélioré.\n2. Optimisez vos images (format WebP, compression).\n3. Activez un plugin de cache si WordPress (LiteSpeed Cache ou WP Super Cache, gratuits).\n4. Réduisez le nombre de scripts externes (analytics, widgets, chat, etc.).\n5. Testez sur https://pagespeed.web.dev pour voir les recommandations spécifiques de Google.' });
     }
     if (!perfMobile.textCompression) {
-      recs.push({ priority: 'moyen', category: 'Performance', action: 'Activer la compression GZIP/Brotli pour les fichiers texte', impact: 'Élevé', difficulty: 'Facile' });
+      recs.push({ priority: 'moyen', category: 'Performance', action: 'Activer la compression GZIP/Brotli', impact: 'Élevé', difficulty: 'Facile',
+        solution: '1. La compression réduit la taille des fichiers envoyés au navigateur de 60-80%.\n2. Sur Apache (.htaccess) : ajoutez "AddOutputFilterByType DEFLATE text/html text/css application/javascript"\n3. Sur Nginx : activez gzip dans la configuration.\n4. Chez la plupart des hébergeurs (OVH, o2switch, Ionos) : c\'est souvent activable en 1 clic dans le panneau d\'admin.\n5. Si Cloudflare : c\'est activé automatiquement.\n6. Résultat : votre site charge 2-3x plus vite, surtout sur mobile avec une connexion lente.' });
     }
     if (!perfMobile.imageOptimization) {
-      recs.push({ priority: 'moyen', category: 'Performance', action: 'Optimiser et compresser les images du site', impact: 'Élevé', difficulty: 'Facile' });
+      recs.push({ priority: 'moyen', category: 'Performance', action: 'Optimiser et compresser les images', impact: 'Élevé', difficulty: 'Facile',
+        solution: '1. Les images sont souvent responsables de 50-80% du poids d\'une page.\n2. Convertissez vos images en format WebP (30% plus léger que JPEG) : https://squoosh.app/\n3. Redimensionnez : une image de 4000px de large pour un affichage de 800px, c\'est 5x trop lourd.\n4. Si WordPress : installez le plugin "ShortPixel" ou "Imagify" (gratuits jusqu\'à un certain volume) — ils optimisent automatiquement.\n5. Pour les nouvelles images : compressez AVANT de les uploader.\n6. Résultat attendu : pages 2-5x plus légères = chargement rapide = visiteurs qui restent.' });
     }
   } else {
-    // PageSpeed not available - give generic advice
-    recs.push({ priority: 'moyen', category: 'Performance', action: 'Vérifier la vitesse de chargement avec Google PageSpeed Insights (pagespeed.web.dev)', impact: 'Élevé', difficulty: 'Facile' });
+    recs.push({ priority: 'moyen', category: 'Performance', action: 'Vérifier la vitesse de chargement sur PageSpeed Insights', impact: 'Élevé', difficulty: 'Facile',
+      solution: '1. Allez sur https://pagespeed.web.dev et entrez l\'URL de votre site.\n2. Google va analyser la vitesse sur mobile ET sur desktop.\n3. Visez un score au-dessus de 70 sur mobile.\n4. Google vous donnera des recommandations spécifiques : images trop lourdes, JavaScript bloquant, etc.\n5. Les 3 actions les plus efficaces sont généralement : compresser les images, activer le cache, et activer la compression GZIP.\n6. Si votre score est en dessous de 50, demandez à un développeur de s\'en occuper — c\'est critique pour votre business.' });
   }
 
   // Liens cassés
   if (data.brokenLinks?.broken?.length > 0) {
-    recs.push({ priority: 'élevé', category: 'Technique', action: `Corriger les ${data.brokenLinks.broken.length} lien(s) cassé(s) (erreurs 404)`, impact: 'Élevé', difficulty: 'Facile' });
+    const brokenUrls = data.brokenLinks.broken.map(b => b.url || b).slice(0, 5).join('\n   - ');
+    recs.push({ priority: 'élevé', category: 'Technique', action: `Corriger les ${data.brokenLinks.broken.length} lien(s) cassé(s) (erreurs 404)`, impact: 'Élevé', difficulty: 'Facile',
+      solution: `1. Ces liens sur votre site mènent vers des pages qui n'existent plus (erreur 404) :\n   - ${brokenUrls}\n2. Un visiteur qui tombe sur une page 404 quitte votre site immédiatement. Google pénalise aussi les sites avec des liens cassés.\n3. Pour chaque lien cassé, vous avez 3 options :\n   a) Corriger l'URL si la page a simplement changé d'adresse\n   b) Supprimer le lien s'il n'est plus utile\n   c) Créer une redirection 301 de l'ancienne URL vers la bonne page\n4. Si WordPress : installez "Broken Link Checker" (gratuit) pour détecter automatiquement les futurs liens cassés.\n5. Vérifiez régulièrement (1x par mois) que tous vos liens fonctionnent.` });
   }
 
-  // Mobile friendly (only flag if PageSpeed API was actually available and returned meaningful data)
+  // Mobile friendly
   const mobileApiAvailForRec = data.pageSpeed?.mobile && data.pageSpeed.mobile.fcp !== 'N/A';
   if (mobileApiAvailForRec && !data.pageSpeed.mobile.mobileFriendly) {
-    recs.push({ priority: 'critique', category: 'Mobile', action: 'Rendre le site responsive / mobile-friendly', impact: 'Très élevé', difficulty: 'Difficile' });
+    recs.push({ priority: 'critique', category: 'Mobile', action: 'Rendre le site responsive / mobile-friendly', impact: 'Très élevé', difficulty: 'Difficile',
+      solution: '1. ⚠️ URGENT : 60% de vos visiteurs sont sur mobile. Un site non mobile-friendly perd la majorité de ses clients potentiels.\n2. Google utilise le "Mobile-First Indexing" — il évalue votre site sur sa version mobile, pas desktop.\n3. Solutions par ordre de facilité :\n   a) Si WordPress : changez de thème pour un thème responsive (Astra, GeneratePress, Flavor — tous gratuits).\n   b) Si site vitrine simple : recréez-le avec un outil moderne (WordPress, Wix, ou Squarespace — tous responsive par défaut).\n   c) Si site sur mesure : demandez à un développeur d\'ajouter les media queries CSS pour l\'adapter au mobile.\n4. Testez sur https://search.google.com/test/mobile-friendly pour vérifier.\n5. Résultat attendu : vous récupérez les 60% de visiteurs mobiles que vous perdez actuellement.' });
   }
 
   // Sort by priority

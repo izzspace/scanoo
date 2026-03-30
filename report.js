@@ -567,7 +567,41 @@ class ScanooReport {
         .text(`Impact : ${rec.impact}   |   Difficulté : ${rec.difficulty}`,
           this.margin + 32, y + 38, { width: this.contentWidth - 40 });
 
-      doc.y = y + 56;
+      let currentY = y + 56;
+
+      // Solution détaillée
+      if (rec.solution) {
+        this.checkPageBreak(80);
+        currentY = doc.y > currentY ? doc.y : currentY;
+        
+        // Solution box background
+        const solX = this.margin + 32;
+        const solWidth = this.contentWidth - 40;
+        
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#1A7F5A')
+          .text('💡 Comment faire concrètement :', solX, currentY + 4, { width: solWidth });
+        
+        currentY = doc.y + 4;
+        this.checkPageBreak(60);
+        currentY = doc.y > currentY ? doc.y : currentY;
+        
+        // Draw solution background
+        const solText = rec.solution;
+        const solHeight = doc.heightOfString(solText, { width: solWidth - 16, fontSize: 8.5 }) + 16;
+        
+        this.checkPageBreak(solHeight + 10);
+        currentY = doc.y > currentY ? doc.y : currentY;
+        
+        doc.roundedRect(solX, currentY, solWidth, solHeight + 8, 6)
+          .fill('#F0FDF4');
+        
+        doc.fontSize(8.5).font('Helvetica').fillColor('#1E293B')
+          .text(solText, solX + 8, currentY + 6, { width: solWidth - 16 });
+        
+        currentY = doc.y + 12;
+      }
+
+      doc.y = currentY + 4;
     });
 
     doc.y += 10;
