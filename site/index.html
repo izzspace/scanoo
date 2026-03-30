@@ -28,19 +28,22 @@
 
     /* ── Variables ────────────────────────────────────────────── */
     :root {
-      --primary:   #1A2B4A;
-      --secondary: #2563EB;
-      --accent:    #10B981;
+      --primary:   #1E3A6E;
+      --secondary: #3A6FCA;
+      --accent:    #2BD78E;
+      --accent-light: #A8F5D0;
       --warning:   #F59E0B;
       --danger:    #EF4444;
-      --light:     #F8FAFC;
-      --medium:    #64748B;
-      --dark:      #1E293B;
-      --border:    #E2E8F0;
+      --light:     #F0F7FF;
+      --medium:    #5A7BA5;
+      --dark:      #152D54;
+      --border:    #D4E4F7;
       --white:     #ffffff;
-      --radius:    12px;
-      --shadow:    0 4px 24px rgba(26, 43, 74, 0.10);
-      --shadow-lg: 0 8px 40px rgba(26, 43, 74, 0.16);
+      --gradient-blue: linear-gradient(135deg, #4A7DD7 0%, #1A8FE8 100%);
+      --gradient-green: linear-gradient(90deg, #2BD78E 0%, #4DF5A8 100%);
+      --radius:    14px;
+      --shadow:    0 4px 24px rgba(30, 58, 110, 0.12);
+      --shadow-lg: 0 8px 40px rgba(30, 58, 110, 0.18);
     }
 
     /* ── Layout ───────────────────────────────────────────────── */
@@ -65,18 +68,18 @@
     }
     .btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
     .btn:active { transform: translateY(0); }
-    .btn--primary   { background: var(--secondary); color: #fff; }
+    .btn--primary   { background: var(--gradient-blue); color: #fff; }
     .btn--secondary { background: var(--white); color: var(--secondary); border: 2px solid var(--secondary); }
     .btn--large     { padding: 18px 48px; font-size: 1.1rem; }
-    .btn--accent    { background: var(--accent); color: #fff; }
+    .btn--accent    { background: var(--gradient-green); color: #152D54; font-weight: 700; }
 
     /* ── Header / Nav ─────────────────────────────────────────── */
     header {
       position: sticky;
       top: 0;
       z-index: 100;
-      background: var(--primary);
-      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+      background: var(--gradient-blue);
+      box-shadow: 0 2px 16px rgba(30, 58, 110, 0.25);
     }
     nav {
       display: flex;
@@ -115,7 +118,7 @@
 
     /* ── Hero ─────────────────────────────────────────────────── */
     .hero {
-      background: linear-gradient(135deg, var(--primary) 0%, #0f1d33 60%, #162847 100%);
+      background: linear-gradient(135deg, #152D54 0%, #1E3A6E 40%, #2A5BAA 100%);
       color: #fff;
       padding: 100px 0 80px;
       overflow: hidden;
@@ -137,9 +140,9 @@
     }
     .hero__badge {
       display: inline-block;
-      background: rgba(16,185,129,.15);
+      background: rgba(43,215,142,.15);
       color: var(--accent);
-      border: 1px solid rgba(16,185,129,.3);
+      border: 1px solid rgba(43,215,142,.3);
       border-radius: 999px;
       padding: 6px 16px;
       font-size: .8rem;
@@ -214,7 +217,7 @@
 
     /* ── Stats bar ────────────────────────────────────────────── */
     .stats {
-      background: var(--secondary);
+      background: var(--gradient-blue);
       color: #fff;
       padding: 32px 0;
     }
@@ -253,8 +256,8 @@
       transform: translateX(-50%);
       width: 36px; height: 36px;
       border-radius: 50%;
-      background: var(--secondary);
-      color: #fff;
+      background: var(--gradient-green);
+      color: #152D54;
       font-size: .9rem;
       font-weight: 700;
       display: flex;
@@ -329,16 +332,16 @@
     }
     .pricing-card:hover { transform: translateY(-4px); }
     .pricing-card--featured {
-      border-color: var(--secondary);
-      background: linear-gradient(180deg, #EFF6FF 0%, #fff 100%);
+      border-color: var(--accent);
+      background: linear-gradient(180deg, #ECFDF5 0%, #fff 100%);
     }
     .pricing-badge {
       position: absolute;
       top: -14px;
       left: 50%;
       transform: translateX(-50%);
-      background: var(--secondary);
-      color: #fff;
+      background: var(--gradient-green);
+      color: #152D54;
       padding: 4px 20px;
       border-radius: 999px;
       font-size: .78rem;
@@ -386,7 +389,7 @@
 
     /* ── Form ─────────────────────────────────────────────────── */
     .form-section {
-      background: linear-gradient(135deg, var(--primary) 0%, #0f1d33 100%);
+      background: linear-gradient(135deg, #152D54 0%, #1E3A6E 60%, #2A5BAA 100%);
       padding: 80px 0;
       color: #fff;
     }
@@ -425,7 +428,7 @@
       border-color: var(--secondary);
     }
     .form-group select { appearance: none; cursor: pointer; }
-    .form-group select option { background: var(--primary); color: #fff; }
+    .form-group select option { background: #1E3A6E; color: #fff; }
     .form-submit {
       margin-top: 28px;
       width: 100%;
@@ -485,8 +488,8 @@
 
     /* ── Footer ───────────────────────────────────────────────── */
     footer {
-      background: var(--primary);
-      color: #94B8E0;
+      background: linear-gradient(135deg, #152D54 0%, #1E3A6E 100%);
+      color: #8DB8E8;
       padding: 48px 0 32px;
     }
     .footer__inner {
