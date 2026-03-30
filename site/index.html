@@ -10,6 +10,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://scanoo.fr" />
   <link rel="canonical" href="https://scanoo.fr" />
+  <link rel="icon" type="image/png" href="logo.png" />
 
   <style>
     /* ── Reset & Base ─────────────────────────────────────────── */
@@ -84,10 +85,18 @@
       height: 64px;
     }
     .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       font-size: 1.5rem;
       font-weight: 800;
       color: #fff;
       letter-spacing: -0.5px;
+    }
+    .logo img {
+      height: 36px;
+      width: 36px;
+      border-radius: 50%;
     }
     .logo span { color: var(--accent); }
     .nav-links {
@@ -549,7 +558,7 @@
 ═══════════════════════════════════════════════ -->
 <header>
   <nav class="container">
-    <a href="#" class="logo">Scan<span>oo</span></a>
+    <a href="#" class="logo"><img src="logo.png" alt="Scanoo logo">Scan<span>oo</span></a>
     <div class="nav-links">
       <a href="#comment">Comment ça marche</a>
       <a href="#inclus">Ce qui est inclus</a>
@@ -913,7 +922,7 @@
   <div class="container">
     <div class="footer__inner">
       <div class="footer__brand">
-        <div class="logo">Scan<span>oo</span></div>
+        <div class="logo"><img src="logo.png" alt="Scanoo logo">Scan<span>oo</span></div>
         <p>Le médecin de votre visibilité en ligne. Aidons les TPE/PME françaises à obtenir plus de clients grâce à une présence en ligne optimisée.</p>
       </div>
       <div class="footer__col">
