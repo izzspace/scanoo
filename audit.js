@@ -490,79 +490,79 @@ function generateRecommendations(data, score) {
 
   // SSL
   if (!data.ssl?.valid) {
-    recs.push({ priority: 'critique', category: 'Sécurité', action: 'Votre site n\'est pas sécurisé (pas de cadenas)', impact: 'Très élevé', difficulty: 'Facile',
-      solution: 'Quand vos clients visitent votre site, leur navigateur affiche "Non sécurisé" à côté de l\'adresse. Ça fait fuir.\n\nCe qu\'il faut faire :\n-> Appelez votre hébergeur (celui chez qui vous payez votre site) et demandez : "Je voudrais activer le certificat SSL gratuit sur mon site." C\'est souvent fait en 5 minutes par leur support.\n\nRésultat : le petit cadenas vert apparaît -> vos visiteurs ont confiance -> Google vous met mieux dans les résultats.' });
+    recs.push({ priority: 'critique', category: 'Sécurité', action: 'Ton site n\'est pas sécurisé (pas de cadenas)', impact: 'Très élevé', difficulty: 'Facile',
+      solution: 'Quand tes clients visitent ton site, leur navigateur affiche "Non sécurisé" à côté de l\'adresse. Ça fait fuir.\n\nCe qu\'il faut faire :\n-> Appelle ton hébergeur (celui chez qui tu paies ton site) et demande : "Je voudrais activer le certificat SSL gratuit sur mon site." C\'est souvent fait en 5 minutes par leur support.\n\nRésultat : le petit cadenas vert apparaît -> tes visiteurs ont confiance -> Google te met mieux dans les résultats.' });
   } else if (data.ssl?.daysLeft < 30) {
-    recs.push({ priority: 'urgent', category: 'Sécurité', action: `Votre cadenas de sécurité expire dans ${data.ssl.daysLeft} jours`, impact: 'Élevé', difficulty: 'Facile',
-      solution: `Votre site est sécurisé, mais le certificat expire bientôt. Si rien n'est fait, vos visiteurs verront un gros avertissement "Site dangereux".\n\nCe qu'il faut faire :\n-> Appelez votre hébergeur et demandez : "Mon certificat SSL expire bientôt, pouvez-vous le renouveler ?" Normalement c'est automatique, mais mieux vaut vérifier.\n\nC'est gratuit et ça prend 2 minutes au téléphone.` });
+    recs.push({ priority: 'urgent', category: 'Sécurité', action: `Ton cadenas de sécurité expire dans ${data.ssl.daysLeft} jours`, impact: 'Élevé', difficulty: 'Facile',
+      solution: `Ton site est sécurisé, mais le certificat expire bientôt. Si rien n'est fait, tes visiteurs verront un gros avertissement "Site dangereux".\n\nCe qu'il faut faire :\n-> Appelle ton hébergeur et demande : "Mon certificat SSL expire bientôt, peux-tu le renouveler ?" Normalement c'est automatique, mais mieux vaut vérifier.\n\nC'est gratuit et ça prend 2 minutes au téléphone.` });
   }
 
   // SEO
   const seo = data.seo || {};
   if (!seo.title) {
-    recs.push({ priority: 'élevé', category: 'Référencement', action: 'Votre site n\'a pas de titre dans Google', impact: 'Élevé', difficulty: 'Facile',
-      solution: 'Quand quelqu\'un cherche votre activité sur Google, votre site apparaît sans titre clair. Résultat : personne ne clique dessus.\n\nCe qu\'il faut faire :\n-> Demandez à la personne qui gère votre site d\'ajouter un titre. Donnez-lui cette phrase :\n"[Votre métier] à [Votre ville] — [Nom de votre entreprise]"\nExemple : "Plombier à Lyon — Martin Plomberie"\n\nSi vous êtes sur WordPress, vous pouvez le faire vous-même : Réglages -> Général -> Titre du site.\n\nRésultat : les gens qui cherchent votre métier sur Google voient clairement qui vous êtes -> plus de clics -> plus de clients.' });
+    recs.push({ priority: 'élevé', category: 'Référencement', action: 'Ton site n\'a pas de titre dans Google', impact: 'Élevé', difficulty: 'Facile',
+      solution: 'Quand quelqu\'un cherche ton activité sur Google, ton site apparaît sans titre clair. Résultat : personne ne clique dessus.\n\nCe qu\'il faut faire :\n-> Demande à la personne qui gère ton site d\'ajouter un titre. Donne-lui cette phrase :\n"[Ton métier] à [Ta ville] — [Nom de ton entreprise]"\nExemple : "Plombier à Lyon — Martin Plomberie"\n\nSi tu es sur WordPress, tu peux le faire toi-même : Réglages -> Général -> Titre du site.\n\nRésultat : les gens qui cherchent ton métier sur Google voient clairement qui tu es -> plus de clics -> plus de clients.' });
   } else if (seo.title.length < 20 || seo.title.length > 70) {
-    recs.push({ priority: 'moyen', category: 'Référencement', action: `Le titre de votre site dans Google n'est pas optimal`, impact: 'Moyen', difficulty: 'Facile',
-      solution: `Votre titre fait ${seo.title.length} caractères. ${seo.title.length < 20 ? 'Il est trop court — Google ne comprend pas bien ce que vous faites.' : 'Il est trop long — Google le coupe et vos clients ne voient pas tout.'}\n\nCe qu'il faut faire :\n-> Demandez à la personne qui gère votre site de modifier le titre avec ce format :\n"[Votre métier] à [Votre ville] | [Nom entreprise]"\n\nGardez ça entre 30 et 60 caractères, c'est la longueur idéale pour Google.` });
+    recs.push({ priority: 'moyen', category: 'Référencement', action: `Le titre de ton site dans Google n'est pas optimal`, impact: 'Moyen', difficulty: 'Facile',
+      solution: `Ton titre fait ${seo.title.length} caractères. ${seo.title.length < 20 ? 'Il est trop court — Google ne comprend pas bien ce que tu fais.' : 'Il est trop long — Google le coupe et tes clients ne voient pas tout.'}\n\nCe qu'il faut faire :\n-> Demande à la personne qui gère ton site de modifier le titre avec ce format :\n"[Ton métier] à [Ta ville] | [Nom entreprise]"\n\nGarde ça entre 30 et 60 caractères, c'est la longueur idéale pour Google.` });
   }
 
   if (!seo.description) {
-    recs.push({ priority: 'élevé', category: 'Référencement', action: 'Votre site n\'a pas de description dans Google', impact: 'Élevé', difficulty: 'Facile',
-      solution: 'Dans les résultats Google, sous le titre de votre site, il y a normalement 2 lignes de description. Les vôtres sont vides ou affichent n\'importe quoi.\n\nCe qu\'il faut faire :\n-> Demandez à la personne qui gère votre site d\'ajouter une description. Donnez-lui ce texte (adaptez-le) :\n"[Votre métier] à [Ville] depuis [X] ans. [Votre point fort]. Devis gratuit au [téléphone]."\n\nExemple : "Plombier à Paris depuis 15 ans. Intervention en 1h, 7j/7. Devis gratuit au 01 23 45 67 89."\n\nRésultat : les gens comprennent ce que vous faites -> ils cliquent -> ils vous appellent. Ça peut augmenter vos visites de 20 à 30%.' });
+    recs.push({ priority: 'élevé', category: 'Référencement', action: 'Ton site n\'a pas de description dans Google', impact: 'Élevé', difficulty: 'Facile',
+      solution: 'Dans les résultats Google, sous le titre de ton site, il y a normalement 2 lignes de description. Les tiennes sont vides ou affichent n\'importe quoi.\n\nCe qu\'il faut faire :\n-> Demande à la personne qui gère ton site d\'ajouter une description. Donne-lui ce texte (adapte-le) :\n"[Ton métier] à [Ville] depuis [X] ans. [Ton point fort]. Devis gratuit au [téléphone]."\n\nExemple : "Plombier à Paris depuis 15 ans. Intervention en 1h, 7j/7. Devis gratuit au 01 23 45 67 89."\n\nRésultat : les gens comprennent ce que tu fais -> ils cliquent -> ils t\'appellent. Ça peut augmenter tes visites de 20 à 30%.' });
   } else if (seo.description.length < 50 || seo.description.length > 160) {
-    recs.push({ priority: 'moyen', category: 'Référencement', action: `La description de votre site dans Google n'est pas optimale`, impact: 'Moyen', difficulty: 'Facile',
-      solution: `Votre description fait ${seo.description.length} caractères. ${seo.description.length < 50 ? 'C\'est trop court — Google risque de l\'ignorer.' : 'C\'est trop long — Google la coupe.'}\n\nCe qu'il faut faire :\n-> Réécrivez-la en 120-155 caractères. Incluez : ce que vous faites + où + pourquoi vous choisir.\n-> Demandez à votre webmaster de la mettre à jour.` });
+    recs.push({ priority: 'moyen', category: 'Référencement', action: `La description de ton site dans Google n'est pas optimale`, impact: 'Moyen', difficulty: 'Facile',
+      solution: `Ta description fait ${seo.description.length} caractères. ${seo.description.length < 50 ? 'C\'est trop court — Google risque de l\'ignorer.' : 'C\'est trop long — Google la coupe.'}\n\nCe qu'il faut faire :\n-> Réécris-la en 120-155 caractères. Inclus : ce que tu fais + où + pourquoi te choisir.\n-> Demande à la personne qui s\'occupe de ton site de la mettre à jour.` });
   }
 
   if (!seo.h1 || seo.h1.length === 0) {
-    recs.push({ priority: 'élevé', category: 'Référencement', action: 'Il manque un titre principal sur votre page d\'accueil', impact: 'Élevé', difficulty: 'Facile',
-      solution: 'Votre page d\'accueil n\'a pas de "gros titre" visible. C\'est comme une vitrine sans enseigne — Google ne comprend pas ce que vous vendez.\n\nCe qu\'il faut faire :\n-> Demandez à la personne qui gère votre site d\'ajouter un titre principal visible en haut de page, par exemple :\n"Plombier à Paris — Dépannage rapide 7j/7"\n\nC\'est le texte le plus important de votre site pour Google.' });
+    recs.push({ priority: 'élevé', category: 'Référencement', action: 'Il manque un titre principal sur ta page d\'accueil', impact: 'Élevé', difficulty: 'Facile',
+      solution: 'Ta page d\'accueil n\'a pas de "gros titre" visible. C\'est comme une vitrine sans enseigne — Google ne comprend pas ce que tu vends.\n\nCe qu\'il faut faire :\n-> Demande à la personne qui gère ton site d\'ajouter un titre principal visible en haut de page, par exemple :\n"Plombier à Paris — Dépannage rapide 7j/7"\n\nC\'est le texte le plus important de ton site pour Google.' });
   } else if (seo.h1.length > 1) {
-    recs.push({ priority: 'moyen', category: 'Référencement', action: `Votre page a ${seo.h1.length} titres principaux au lieu d'un seul`, impact: 'Moyen', difficulty: 'Facile',
-      solution: `Votre page affiche ${seo.h1.length} titres principaux : ${seo.h1.map(h => '"' + h + '"').join(', ')}.\n\nLe problème : Google ne sait pas lequel est le vrai titre -> il comprend moins bien votre page.\n\nCe qu'il faut faire :\n-> Demandez à votre webmaster de garder UN SEUL titre principal (le plus important) et de transformer les autres en sous-titres.` });
+    recs.push({ priority: 'moyen', category: 'Référencement', action: `Ta page a ${seo.h1.length} titres principaux au lieu d'un seul`, impact: 'Moyen', difficulty: 'Facile',
+      solution: `Ta page affiche ${seo.h1.length} titres principaux : ${seo.h1.map(h => '"' + h + '"').join(', ')}.\n\nLe problème : Google ne sait pas lequel est le vrai titre -> il comprend moins bien ta page.\n\nCe qu'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site de garder UN SEUL titre principal (le plus important) et de transformer les autres en sous-titres.` });
   }
 
   if (seo.images?.withoutAlt > 0) {
-    recs.push({ priority: 'moyen', category: 'Référencement', action: `${seo.images.withoutAlt} photo(s) de votre site sont invisibles pour Google`, impact: 'Moyen', difficulty: 'Facile',
-      solution: `Google ne peut pas "voir" les photos. Il lit une description textuelle de chaque image. ${seo.images.withoutAlt} de vos photos n'ont pas de description -> Google les ignore complètement.\n\nCe qu'il faut faire :\n-> Demandez à votre webmaster d'ajouter une description à chaque photo. Exemple : pour une photo de votre boutique, la description serait "Boulangerie Martin à Bordeaux — façade".\n\nRésultat : vos photos peuvent apparaître dans Google Images -> des clients vous trouvent par là aussi.` });
+    recs.push({ priority: 'moyen', category: 'Référencement', action: `${seo.images.withoutAlt} photo(s) de ton site sont invisibles pour Google`, impact: 'Moyen', difficulty: 'Facile',
+      solution: `Google ne peut pas "voir" les photos. Il lit une description textuelle de chaque image. ${seo.images.withoutAlt} de tes photos n'ont pas de description -> Google les ignore complètement.\n\nCe qu'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site d'ajouter une description à chaque photo. Exemple : pour une photo de ta boutique, la description serait "Boulangerie Martin à Bordeaux — façade".\n\nRésultat : tes photos peuvent apparaître dans Google Images -> des clients te trouvent par là aussi.` });
   }
 
   if (!seo.canonical) {
     recs.push({ priority: 'moyen', category: 'Référencement', action: 'Risque de pages en double dans Google', impact: 'Moyen', difficulty: 'Facile',
-      solution: 'Votre site peut apparaître sous plusieurs adresses dans Google (avec www, sans www, etc.). Ça disperse votre visibilité.\n\nCe qu\'il faut faire :\n-> Demandez à votre webmaster d\'ajouter une "balise canonical" — dites-lui simplement : "Il faut indiquer à Google quelle est l\'adresse principale du site." Il saura quoi faire.\n\nC\'est une modification rapide (2 minutes) qui concentre toute votre puissance sur une seule adresse.' });
+      solution: 'Ton site peut apparaître sous plusieurs adresses dans Google (avec www, sans www, etc.). Ça disperse ta visibilité.\n\nCe qu\'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site d\'ajouter une "balise canonical" — dis-lui simplement : "Il faut indiquer à Google quelle est l\'adresse principale du site." Il saura quoi faire.\n\nC\'est une modification rapide (2 minutes) qui concentre toute ta puissance sur une seule adresse.' });
   }
 
   if (!seo.lang) {
-    recs.push({ priority: 'faible', category: 'Référencement', action: 'Google ne sait pas que votre site est en français', impact: 'Faible', difficulty: 'Très facile',
-      solution: 'Votre site ne précise pas qu\'il est en français. Google peut donc le proposer à des gens qui cherchent dans d\'autres langues.\n\nCe qu\'il faut faire :\n-> Dites à votre webmaster : "Il faut indiquer la langue française sur le site." C\'est 10 secondes de travail pour lui.' });
+    recs.push({ priority: 'faible', category: 'Référencement', action: 'Google ne sait pas que ton site est en français', impact: 'Faible', difficulty: 'Très facile',
+      solution: 'Ton site ne précise pas qu\'il est en français. Google peut donc le proposer à des gens qui cherchent dans d\'autres langues.\n\nCe qu\'il faut faire :\n-> Dites à la personne qui s\'occupe de ton site : "Il faut indiquer la langue française sur le site." C\'est 10 secondes de travail pour lui.' });
   }
 
   // Structured data
   if (!seo.structuredData || seo.structuredData.length === 0) {
     recs.push({ priority: 'moyen', category: 'Référencement', action: 'Vos infos business n\'apparaissent pas directement dans Google', impact: 'Élevé', difficulty: 'Moyen',
-      solution: 'Vous savez quand vous cherchez un restaurant sur Google et vous voyez directement ses horaires, son adresse, ses avis, son téléphone ? Votre site ne fait pas ça.\n\nCe qu\'il faut faire :\n-> Demandez à votre webmaster d\'ajouter des "données structurées" (il comprendra). Dites-lui : "Je veux que nos horaires, adresse et téléphone apparaissent directement dans les résultats Google."\n\nRésultat : vos clients trouvent votre téléphone et vos horaires sans même visiter votre site -> ils vous appellent directement.' });
+      solution: 'Vous savez quand tu cherches un restaurant sur Google et tu vois directement ses horaires, son adresse, ses avis, son téléphone ? Ton site ne fait pas ça.\n\nCe qu\'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site d\'ajouter des "données structurées" (il comprendra). Dis-lui : "Je veux que nos horaires, adresse et téléphone apparaissent directement dans les résultats Google."\n\nRésultat : tes clients trouvent ton téléphone et tes horaires sans même visiter ton site -> ils t\'appellent directement.' });
   }
 
   // Open Graph
   if (!seo.og?.image) {
-    recs.push({ priority: 'moyen', category: 'Réseaux sociaux', action: 'Quand on partage votre site sur Facebook/WhatsApp, aucune image ne s\'affiche', impact: 'Moyen', difficulty: 'Facile',
-      solution: 'Si un client satisfait partage votre site sur Facebook ou WhatsApp, le lien apparaît sans image — c\'est moche et personne ne clique dessus.\n\nCe qu\'il faut faire :\n-> Demandez à votre webmaster d\'ajouter une "image de partage" (aussi appelée Open Graph). Fournissez-lui une belle photo de votre activité (votre vitrine, votre équipe, vos produits).\n\nRésultat : quand quelqu\'un partage votre site, ça affiche une belle image avec votre nom -> ça donne envie de cliquer.' });
+    recs.push({ priority: 'moyen', category: 'Réseaux sociaux', action: 'Quand on partage ton site sur Facebook/WhatsApp, aucune image ne s\'affiche', impact: 'Moyen', difficulty: 'Facile',
+      solution: 'Si un client satisfait partage ton site sur Facebook ou WhatsApp, le lien apparaît sans image — c\'est moche et personne ne clique dessus.\n\nCe qu\'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site d\'ajouter une "image de partage" (aussi appelée Open Graph). Fournis-lui une belle photo de ton activité (ta vitrine, ton équipe, tes produits).\n\nRésultat : quand quelqu\'un partage ton site, ça affiche une belle image avec ton nom -> ça donne envie de cliquer.' });
   }
 
   // Security headers
   const sec = data.securityHeaders?.checks || {};
   if (!sec.strictTransportSecurity) {
-    recs.push({ priority: 'moyen', category: 'Sécurité', action: 'Votre site n\'oblige pas la connexion sécurisée', impact: 'Moyen', difficulty: 'Moyen',
-      solution: 'Même si votre site a le cadenas, quelqu\'un pourrait y accéder sans la protection sécurisée. C\'est une faille.\n\nCe qu\'il faut faire :\n-> Demandez à votre hébergeur ou à votre webmaster : "Je voudrais forcer la connexion HTTPS sur tout le site." C\'est un réglage courant, ils sauront faire.\n\nRésultat : tous vos visiteurs sont automatiquement protégés.' });
+    recs.push({ priority: 'moyen', category: 'Sécurité', action: 'Ton site n\'oblige pas la connexion sécurisée', impact: 'Moyen', difficulty: 'Moyen',
+      solution: 'Même si ton site a le cadenas, quelqu\'un pourrait y accéder sans la protection sécurisée. C\'est une faille.\n\nCe qu\'il faut faire :\n-> Demande à ton hébergeur ou à la personne qui s\'occupe de ton site : "Je voudrais forcer la connexion HTTPS sur tout le site." C\'est un réglage courant, ils sauront faire.\n\nRésultat : tous tes visiteurs sont automatiquement protégés.' });
   }
   if (!sec.contentSecurityPolicy) {
     recs.push({ priority: 'faible', category: 'Sécurité', action: 'Protection avancée contre le piratage manquante', impact: 'Élevé', difficulty: 'Difficile',
-      solution: 'Votre site manque d\'une protection avancée contre certaines attaques informatiques.\n\nCe qu\'il faut faire :\n-> Ce point est technique. Mentionnez-le lors de votre prochaine refonte de site ou à votre prestataire web : "On m\'a recommandé d\'ajouter une Content Security Policy." Il saura quoi faire.\n\nPas urgent, mais c\'est un plus pour la sécurité de vos visiteurs.' });
+      solution: 'Ton site manque d\'une protection avancée contre certaines attaques informatiques.\n\nCe qu\'il faut faire :\n-> Ce point est technique. Mentionne-le lors de ta prochaine refonte de site ou à ton prestataire web : "On m\'a recommandé d\'ajouter une une protection avancée." Il saura quoi faire.\n\nPas urgent, mais c\'est un plus pour la sécurité de tes visiteurs.' });
   }
   if (!sec.xFrameOptions) {
-    recs.push({ priority: 'moyen', category: 'Sécurité', action: 'Votre site peut être copié par des sites malveillants', impact: 'Moyen', difficulty: 'Facile',
-      solution: 'Des sites malveillants peuvent intégrer votre site dans le leur pour tromper vos clients (arnaque au clic).\n\nCe qu\'il faut faire :\n-> Demandez à votre webmaster : "Il faut ajouter la protection X-Frame-Options sur le site." C\'est une modification simple et rapide.\n\nRésultat : impossible pour un site frauduleux d\'utiliser votre site pour arnaquer vos clients.' });
+    recs.push({ priority: 'moyen', category: 'Sécurité', action: 'Ton site peut être copié par des sites malveillants', impact: 'Moyen', difficulty: 'Facile',
+      solution: 'Des sites malveillants peuvent intégrer ton site dans le leur pour tromper tes clients (arnaque au clic).\n\nCe qu\'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site : "Il faut ajouter la protection une protection contre le piratage sur le site." C\'est une modification simple et rapide.\n\nRésultat : impossible pour un site frauduleux d\'utiliser ton site pour arnaquer tes clients.' });
   }
 
   // Performance
@@ -571,37 +571,37 @@ function generateRecommendations(data, score) {
   if (perfApiAvail) {
     const perf = perfMobile.performance;
     if (perf < 50) {
-      recs.push({ priority: 'élevé', category: 'Vitesse', action: 'Votre site est trop lent sur téléphone (score : ' + perf + '/100)', impact: 'Très élevé', difficulty: 'Difficile',
-        solution: 'Plus de la moitié des gens quittent un site qui met plus de 3 secondes à charger. Le vôtre est en dessous de la moyenne.\n\nCe qu\'il faut faire :\n-> Demandez à votre webmaster de faire 3 choses :\n  1. Réduire la taille des photos du site (elles sont probablement trop lourdes)\n  2. Activer le "cache" du site (ça accélère le chargement pour les visiteurs qui reviennent)\n  3. Activer la "compression" (ça réduit le poids des pages)\n\nSi vous êtes sur WordPress, dites-lui d\'installer un plugin de cache comme "LiteSpeed Cache" (gratuit).\n\nRésultat : votre site charge plus vite -> les visiteurs restent -> Google vous met plus haut dans les résultats.' });
+      recs.push({ priority: 'élevé', category: 'Vitesse', action: 'Ton site est trop lent sur téléphone (score : ' + perf + '/100)', impact: 'Très élevé', difficulty: 'Difficile',
+        solution: 'Plus de la moitié des gens quittent un site qui met plus de 3 secondes à charger. Le tien est en dessous de la moyenne.\n\nCe qu\'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site de faire 3 choses :\n  1. Réduire la taille des photos du site (elles sont probablement trop lourdes)\n  2. Activer le "cache" du site (ça accélère le chargement pour les visiteurs qui reviennent)\n  3. Activer la "compression" (ça réduit le poids des pages)\n\nSi tu es sur WordPress, dis-lui d\'installer un plugin de cache comme "LiteSpeed Cache" (gratuit).\n\nRésultat : ton site charge plus vite -> les visiteurs restent -> Google te met plus haut dans les résultats.' });
     } else if (perf < 70) {
-      recs.push({ priority: 'moyen', category: 'Vitesse', action: 'Votre site pourrait charger plus vite sur téléphone (score : ' + perf + '/100)', impact: 'Élevé', difficulty: 'Moyen',
-        solution: 'Votre site n\'est pas lent, mais il peut faire mieux. Chaque seconde gagnée = plus de clients qui restent.\n\nCe qu\'il faut faire :\n-> Demandez à votre webmaster de réduire la taille des images et d\'activer le cache du site.\n\nSi vous êtes sur WordPress, un simple plugin de cache (gratuit) peut faire une grande différence.' });
+      recs.push({ priority: 'moyen', category: 'Vitesse', action: 'Ton site pourrait charger plus vite sur téléphone (score : ' + perf + '/100)', impact: 'Élevé', difficulty: 'Moyen',
+        solution: 'Ton site n\'est pas lent, mais il peut faire mieux. Chaque seconde gagnée = plus de clients qui restent.\n\nCe qu\'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site de réduire la taille des images et d\'activer le cache du site.\n\nSi tu es sur WordPress, un simple plugin de cache (gratuit) peut faire une grande différence.' });
     }
     if (!perfMobile.textCompression) {
-      recs.push({ priority: 'moyen', category: 'Vitesse', action: 'La compression n\'est pas activée sur votre site', impact: 'Élevé', difficulty: 'Facile',
-        solution: 'C\'est comme envoyer un fichier par email sans le compresser — c\'est plus lourd et plus long.\n\nCe qu\'il faut faire :\n-> Demandez à votre hébergeur d\'activer la "compression GZIP". C\'est souvent un simple bouton à cocher dans votre panneau d\'administration.\n\nRésultat : votre site charge 2 à 3 fois plus vite, surtout sur mobile.' });
+      recs.push({ priority: 'moyen', category: 'Vitesse', action: 'La compression n\'est pas activée sur ton site', impact: 'Élevé', difficulty: 'Facile',
+        solution: 'C\'est comme envoyer un fichier par email sans le compresser — c\'est plus lourd et plus long.\n\nCe qu\'il faut faire :\n-> Demande à ton hébergeur d\'activer la "compression GZIP". C\'est souvent un simple bouton à cocher dans ton panneau d\'administration.\n\nRésultat : ton site charge 2 à 3 fois plus vite, surtout sur mobile.' });
     }
     if (!perfMobile.imageOptimization) {
-      recs.push({ priority: 'moyen', category: 'Vitesse', action: 'Les photos de votre site sont trop lourdes', impact: 'Élevé', difficulty: 'Facile',
-        solution: 'Les photos représentent souvent 80% du poids de votre site. Si elles sont trop grosses, tout rame.\n\nCe qu\'il faut faire :\n-> Avant de mettre une photo sur votre site, réduisez-la sur squoosh.app (gratuit, rien à installer). Ça prend 30 secondes par photo.\n-> Si vous êtes sur WordPress, demandez à votre webmaster d\'installer "ShortPixel" (gratuit) — il compresse automatiquement toutes les photos.\n\nRésultat : pages 2 à 5 fois plus légères = site rapide = clients contents.' });
+      recs.push({ priority: 'moyen', category: 'Vitesse', action: 'Les photos de ton site sont trop lourdes', impact: 'Élevé', difficulty: 'Facile',
+        solution: 'Les photos représentent souvent 80% du poids de ton site. Si elles sont trop grosses, tout rame.\n\nCe qu\'il faut faire :\n-> Avant de mettre une photo sur ton site, réduisez-la sur squoosh.app (gratuit, rien à installer). Ça prend 30 secondes par photo.\n-> Si tu es sur WordPress, demande à la personne qui s\'occupe de ton site d\'installer "ShortPixel" (gratuit) — il compresse automatiquement toutes les photos.\n\nRésultat : pages 2 à 5 fois plus légères = site rapide = clients contents.' });
     }
   } else {
-    recs.push({ priority: 'moyen', category: 'Vitesse', action: 'Testez la vitesse de votre site', impact: 'Élevé', difficulty: 'Facile',
-      solution: 'On n\'a pas pu mesurer la vitesse exacte de votre site, mais c\'est un facteur crucial.\n\nCe qu\'il faut faire :\n-> Allez sur pagespeed.web.dev, tapez l\'adresse de votre site, et regardez le score sur mobile.\n-> Si c\'est en dessous de 50 (rouge) : montrez le résultat à votre webmaster et demandez-lui d\'optimiser.\n-> Si c\'est entre 50 et 90 (orange) : quelques améliorations simples suffisent.\n-> Au-dessus de 90 (vert) : tout est bon !\n\nUn site rapide = des clients qui restent. Un site lent = des clients qui partent chez le concurrent.' });
+    recs.push({ priority: 'moyen', category: 'Vitesse', action: 'Testez la vitesse de ton site', impact: 'Élevé', difficulty: 'Facile',
+      solution: 'On n\'a pas pu mesurer la vitesse exacte de ton site, mais c\'est un facteur crucial.\n\nCe qu\'il faut faire :\n-> Va sur le site de test de vitesse de Google (pagespeed.web.dev), tapez l\'adresse de ton site, et regardez le score sur mobile.\n-> Si c\'est en dessous de 50 (rouge) : montrez le résultat à la personne qui s\'occupe de ton site et demandez-lui d\'optimiser.\n-> Si c\'est entre 50 et 90 (orange) : quelques améliorations simples suffisent.\n-> Au-dessus de 90 (vert) : tout est bon !\n\nUn site rapide = des clients qui restent. Un site lent = des clients qui partent chez le concurrent.' });
   }
 
   // Liens cassés
   if (data.brokenLinks?.broken?.length > 0) {
     const brokenUrls = data.brokenLinks.broken.map(b => b.url || b).slice(0, 5).join('\n  • ');
-    recs.push({ priority: 'élevé', category: 'Technique', action: `${data.brokenLinks.broken.length} lien(s) sur votre site mènent vers des pages qui n'existent plus`, impact: 'Élevé', difficulty: 'Facile',
-      solution: `Quand un visiteur clique sur un de ces liens, il tombe sur une page d'erreur. C'est frustrant et ça donne une mauvaise image.\n\nLiens concernés :\n  • ${brokenUrls}\n\nCe qu'il faut faire :\n-> Demandez à votre webmaster de vérifier ces liens et soit les corriger, soit les supprimer.\n\nRésultat : vos visiteurs naviguent sans problème sur votre site -> ils restent plus longtemps -> plus de chances qu'ils vous contactent.` });
+    recs.push({ priority: 'élevé', category: 'Technique', action: `${data.brokenLinks.broken.length} lien(s) sur ton site mènent vers des pages qui n'existent plus`, impact: 'Élevé', difficulty: 'Facile',
+      solution: `Quand un visiteur clique sur un de ces liens, il tombe sur une page d'erreur. C'est frustrant et ça donne une mauvaise image.\n\nLiens concernés :\n  • ${brokenUrls}\n\nCe qu'il faut faire :\n-> Demande à la personne qui s\'occupe de ton site de vérifier ces liens et soit les corriger, soit les supprimer.\n\nRésultat : tes visiteurs naviguent sans problème sur ton site -> ils restent plus longtemps -> plus de chances qu'ils te contactent.` });
   }
 
   // Mobile friendly
   const mobileApiAvailForRec = data.pageSpeed?.mobile && data.pageSpeed.mobile.fcp !== 'N/A';
   if (mobileApiAvailForRec && !data.pageSpeed.mobile.mobileFriendly) {
-    recs.push({ priority: 'critique', category: 'Mobile', action: 'Votre site est illisible sur téléphone', impact: 'Très élevé', difficulty: 'Difficile',
-      solution: 'ATTENTION : C\'est le problème le plus grave de votre site.\n\n6 personnes sur 10 visitent votre site depuis leur téléphone. Si c\'est illisible (texte trop petit, boutons impossibles à cliquer, page qui déborde), ils partent immédiatement chez votre concurrent.\n\nEn plus, Google privilégie les sites adaptés au mobile dans ses résultats.\n\nCe qu\'il faut faire :\n-> Si votre site a été créé il y a plus de 5 ans, il est probablement temps de le refaire avec un outil moderne (WordPress, Wix, Squarespace — tous créent des sites adaptés au mobile automatiquement).\n-> Si votre site est récent, demandez à votre webmaster de le rendre "responsive" (adapté à tous les écrans).\n\nC\'est un investissement, mais c\'est LE plus rentable que vous puissiez faire pour votre visibilité.' });
+    recs.push({ priority: 'critique', category: 'Mobile', action: 'Ton site est illisible sur téléphone', impact: 'Très élevé', difficulty: 'Difficile',
+      solution: 'ATTENTION : C\'est le problème le plus grave de ton site.\n\n6 personnes sur 10 visitent ton site depuis leur téléphone. Si c\'est illisible (texte trop petit, boutons impossibles à cliquer, page qui déborde), ils partent immédiatement chez ton concurrent.\n\nEn plus, Google privilégie les sites adaptés au mobile dans ses résultats.\n\nCe qu\'il faut faire :\n-> Si ton site a été créé il y a plus de 5 ans, il est probablement temps de le refaire avec un outil moderne (WordPress, Wix, Squarespace — tous créent des sites adaptés au mobile automatiquement).\n-> Si ton site est récent, demande à la personne qui s\'occupe de ton site de le rendre "responsive" (adapté à tous les écrans).\n\nC\'est un investissement, mais c\'est LE plus rentable que tu puisses faire pour ta visibilité.' });
   }
 
   // Sort by priority

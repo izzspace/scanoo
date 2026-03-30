@@ -198,7 +198,7 @@ class ScanooReport {
     const breakdown = score.breakdown || {};
     const subScores = [
       { label: 'Performance', key: 'performance' },
-      { label: 'SEO', key: 'seo' },
+      { label: 'Google', key: 'seo' },
       { label: 'Securite', key: 'security' },
       { label: 'Mobile', key: 'mobile' },
       { label: 'Social', key: 'social' },
@@ -457,7 +457,7 @@ class ScanooReport {
       this.doc.font('Helvetica-Bold').fontSize(10).fillColor(C.dark)
         .text('On n\'a pas pu mesurer la vitesse exacte de ton site.', this.M + 22, msgY + 9, { width: this.CW - 34 });
       this.doc.font('Helvetica').fontSize(9.5).fillColor(C.muted)
-        .text('Tu peux tester toi-meme : va sur pagespeed.web.dev et tape l\'adresse de ton site.', this.M + 22, msgY + 26, { width: this.CW - 34 });
+        .text('Tu peux tester toi-meme : va sur le site de test de vitesse de Google (pagespeed.web.dev) et tape l\'adresse de ton site.', this.M + 22, msgY + 26, { width: this.CW - 34 });
       this.doc.y = msgY + 62;
     } else {
       const perf = mobileData.performance;
