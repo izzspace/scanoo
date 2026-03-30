@@ -1,722 +1,851 @@
 #!/usr/bin/env node
 /**
- * Scanoo — Générateur de rapport PDF professionnel
- * Usage: node report.js <audit.json> [output.pdf]
- *        ou: cat audit.json | node report.js
+ * Scanoo - Generateur de rapport PDF
+ * Usage: node report.js input.json output.pdf
  */
+
+'use strict';
 
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
-const path = require('path');
 
-// ─── Couleurs de la charte Scanoo ──────────────────────────────────────────
-const COLORS = {
-  primary:    '#1A2B4A',   // Bleu foncé
-  secondary:  '#2563EB',   // Bleu électrique
-  accent:     '#10B981',   // Vert
-  warning:    '#F59E0B',   // Orange
-  danger:     '#EF4444',   // Rouge
-  light:      '#F8FAFC',   // Gris très clair
-  medium:     '#94A3B8',   // Gris moyen
-  dark:       '#1E293B',   // Gris foncé
+// ─── Couleurs ────────────────────────────────────────────────────────────────
+const C = {
+  primary:    '#1E3A6E',
+  blue:       '#3A6FCA',
+  mint:       '#2BD78E',
+  green:      '#22C55E',
+  orange:     '#F59E0B',
+  red:        '#EF4444',
+  dark:       '#1E293B',
+  muted:      '#64748B',
+  light:      '#F8FAFC',
+  solutionBg: '#F0F4F8',
   white:      '#FFFFFF',
   border:     '#E2E8F0',
 };
 
-// ─── Fonctions utilitaires ──────────────────────────────────────────────────
-
-function scoreColor(score, max) {
-  const pct = score / max;
-  if (pct >= 0.75) return COLORS.accent;
-  if (pct >= 0.5)  return COLORS.warning;
-  return COLORS.danger;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function scoreToColor(val, max) {
+  const pct = max > 0 ? (val / max) * 100 : 0;
+  if (pct >= 70) return C.green;
+  if (pct >= 40) return C.orange;
+  return C.red;
 }
 
-function scoreLabel(score, max) {
-  const pct = score / max;
-  if (pct >= 0.75) return 'Bon';
-  if (pct >= 0.5)  return 'Moyen';
-  return 'Insuffisant';
+function pctColor(pct) {
+  if (pct >= 70) return C.green;
+  if (pct >= 40) return C.orange;
+  return C.red;
 }
 
-function icon(status) {
-  // status: 'ok' | 'warn' | 'error'
-  if (status === 'ok')   return '✅';
-  if (status === 'warn') return '⚠️ ';
-  return '❌';
+function formatDate(iso) {
+  if (!iso) return 'N/A';
+  try {
+    return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  } catch (_) { return iso; }
 }
 
-function statusColor(status) {
-  if (status === 'ok')   return COLORS.accent;
-  if (status === 'warn') return COLORS.warning;
-  return COLORS.danger;
-}
-
-function formatDate(isoString) {
-  if (!isoString) return 'N/A';
-  return new Date(isoString).toLocaleDateString('fr-FR', {
-    day: '2-digit', month: 'long', year: 'numeric',
-  });
-}
-
-function truncate(str, len = 60) {
+function trunc(str, n = 60) {
   if (!str) return 'N/A';
-  return str.length > len ? str.slice(0, len) + '…' : str;
+  str = String(str);
+  return str.length > n ? str.slice(0, n) + '...' : str;
 }
 
-// ─── Classe générateur PDF ──────────────────────────────────────────────────
+function priorityColor(p) {
+  if (!p) return C.muted;
+  const lp = p.toLowerCase();
+  if (lp === 'critique' || lp === 'urgent') return C.red;
+  if (lp === 'eleve' || lp === 'elevee' || lp === 'high') return C.orange;
+  if (lp === 'moyen' || lp === 'moyenne' || lp === 'medium') return C.blue;
+  return C.muted;
+}
 
+// ─── Rapport ──────────────────────────────────────────────────────────────────
 class ScanooReport {
-  constructor(auditData) {
-    this.data = auditData;
+  constructor(data) {
+    this.data = data;
+    this.M = 50;         // marge gauche/droite
+    this.BOTTOM_MARGIN = 60; // espace footer
+    this.totalPages = 0;
+
     this.doc = new PDFDocument({
       size: 'A4',
       margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      bufferPages: true,  // IMPORTANT: permet switchToPage
       info: {
-        Title: `Rapport Scanoo — ${auditData.meta?.url || 'Audit'}`,
+        Title: 'Rapport Scanoo',
         Author: 'Scanoo',
-        Subject: 'Rapport d\'audit de présence en ligne',
-        Creator: 'Scanoo v1.0',
       },
     });
 
-    this.pageWidth  = this.doc.page.width;
-    this.pageHeight = this.doc.page.height;
-    this.margin     = 45;
-    this.contentWidth = this.pageWidth - this.margin * 2;
-    this.currentY   = 0;
-
-    // Track pages for footer
-    this.pageNumber = 1;
-    this.doc.on('pageAdded', () => { this.pageNumber++; });
+    this.W = this.doc.page.width;   // 595
+    this.H = this.doc.page.height;  // 842
+    this.CW = this.W - this.M * 2; // content width
   }
 
-  // ─── Layout helpers ─────────────────────────────────────────────────────
+  // Y courant
+  get y() { return this.doc.y; }
+  set y(v) { this.doc.y = v; }
 
-  checkPageBreak(neededHeight = 80) {
-    if (this.doc.y + neededHeight > this.pageHeight - 80) {
-      this.addPageWithHeader();
+  // Verifier si on a assez de place, sinon nouvelle page
+  maybeNewPage(needed) {
+    if (this.doc.y + needed > this.H - this.BOTTOM_MARGIN) {
+      this.doc.addPage();
+      this.doc.y = 50;
     }
   }
 
-  addPageWithHeader() {
+  // ─── Cercle de statut ──────────────────────────────────────────────────────
+  statusCircle(x, y, status) {
+    // status: 'ok' | 'warn' | 'error'
+    let color = C.green;
+    if (status === 'warn') color = C.orange;
+    if (status === 'error') color = C.red;
+    this.doc.circle(x, y + 5, 4).fill(color);
+  }
+
+  // ─── Barre horizontale coloree ─────────────────────────────────────────────
+  hbar(x, y, totalW, val, max, color) {
+    const fill = max > 0 ? Math.min(1, val / max) : 0;
+    this.doc.rect(x, y, totalW, 6).fill(C.border);
+    if (fill > 0) {
+      this.doc.rect(x, y, totalW * fill, 6).fill(color);
+    }
+  }
+
+  // ─── PAGE 1 : COUVERTURE ───────────────────────────────────────────────────
+  buildCover() {
+    const doc = this.doc;
+    const W = this.W;
+    const H = this.H;
+    const M = this.M;
+    const CW = this.CW;
+
+    // Fond haut
+    doc.rect(0, 0, W, 320).fill(C.primary);
+    // Fond bas
+    doc.rect(0, 320, W, H - 320).fill(C.light);
+
+    // Titre SCANOO
+    doc.font('Helvetica-Bold').fontSize(52).fillColor(C.white)
+      .text('SCANOO', 0, 70, { width: W, align: 'center' });
+
+    // Sous-titre
+    doc.font('Helvetica').fontSize(13).fillColor('#8BAACC')
+      .text('Rapport de diagnostic de presence en ligne', 0, 138, { width: W, align: 'center' });
+
+    // Ligne separatrice
+    doc.moveTo(M + 60, 168).lineTo(W - M - 60, 168)
+      .strokeColor(C.blue).lineWidth(1).stroke();
+
+    // URL
+    const url = this.data.meta?.url || '';
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(C.white)
+      .text(trunc(url, 70), 0, 182, { width: W, align: 'center' });
+
+    // Date
+    doc.font('Helvetica').fontSize(10).fillColor('#8BAACC')
+      .text('Genere le ' + formatDate(this.data.meta?.auditedAt), 0, 206, { width: W, align: 'center' });
+
+    // Boite score global
+    const score = this.data.score || { total: 0, max: 100 };
+    const total = score.total || 0;
+    const max = score.max || 100;
+    const scoreCol = scoreToColor(total, max);
+
+    const boxW = 220;
+    const boxH = 110;
+    const boxX = (W - boxW) / 2;
+    const boxY = 252;
+
+    doc.roundedRect(boxX, boxY, boxW, boxH, 10).fill(C.white);
+
+    doc.font('Helvetica').fontSize(10).fillColor(C.muted)
+      .text('SCORE GLOBAL', boxX, boxY + 14, { width: boxW, align: 'center' });
+
+    doc.font('Helvetica-Bold').fontSize(54).fillColor(scoreCol)
+      .text(String(total), boxX, boxY + 26, { width: boxW, align: 'center' });
+
+    doc.font('Helvetica').fontSize(12).fillColor(C.muted)
+      .text('/ ' + max, boxX, boxY + 82, { width: boxW, align: 'center' });
+
+    // Jauge visuelle (barre arc-en-ciel sous le score)
+    const gaugeX = boxX + 20;
+    const gaugeY = boxY + 97;
+    const gaugeW = boxW - 40;
+    this.hbar(gaugeX, gaugeY, gaugeW, total, max, scoreCol);
+
+    // Sous-scores
+    let subY = boxY + boxH + 24;
+    const breakdown = score.breakdown || {};
+    const subScores = [
+      { label: 'Performance', key: 'performance' },
+      { label: 'SEO', key: 'seo' },
+      { label: 'Securite', key: 'security' },
+      { label: 'Mobile', key: 'mobile' },
+      { label: 'Social', key: 'social' },
+    ];
+
+    subScores.forEach(({ label, key }) => {
+      const s = breakdown[key];
+      if (!s) return;
+      const col = scoreToColor(s.score, s.max);
+
+      doc.font('Helvetica').fontSize(9).fillColor(C.dark)
+        .text(label, M, subY, { width: 100 });
+
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(col)
+        .text(s.score + '/' + s.max, M + 100, subY, { width: 40 });
+
+      this.hbar(M + 145, subY + 2, CW - 145, s.score, s.max, col);
+      subY += 20;
+    });
+
+    // Footer couverture
+    doc.rect(0, H - 44, W, 44).fill(C.primary);
+    doc.font('Helvetica').fontSize(8).fillColor(C.muted)
+      .text('contact@scanoo.fr | scanoo.fr | Confidentiel | Page 1', M, H - 28, { width: CW, align: 'center' });
+  }
+
+  // ─── PAGE 2 : RESUME EXECUTIF ──────────────────────────────────────────────
+  buildExecutiveSummary() {
     this.doc.addPage();
-    this.addMinimalHeader();
-  }
-
-  addMinimalHeader() {
     const doc = this.doc;
-    doc.rect(0, 0, this.pageWidth, 35).fill(COLORS.primary);
-    doc.fontSize(9).fillColor(COLORS.white)
-      .font('Helvetica-Bold')
-      .text('SCANOO', this.margin, 12, { continued: true })
-      .font('Helvetica')
-      .fillColor(COLORS.medium)
-      .text(`  |  Rapport d'audit — ${truncate(this.data.meta?.url, 50)}`, { align: 'left' });
-    doc.moveDown(0.5);
+    const M = this.M;
+    const CW = this.CW;
     doc.y = 50;
-  }
 
-  // ─── COVER PAGE ─────────────────────────────────────────────────────────
+    // Titre de page
+    doc.font('Helvetica-Bold').fontSize(20).fillColor(C.primary)
+      .text("Ce qu'on a trouve", M, doc.y);
+    doc.y += 8;
+    doc.rect(M, doc.y, CW, 3).fill(C.mint);
+    doc.y += 14;
 
-  addCoverPage() {
-    const doc = this.doc;
-    const w = this.pageWidth;
-    const h = this.pageHeight;
-    const m = this.margin;
+    // Detecter points forts et problemes
+    const recs = this.data.recommendations || [];
+    const critiques = recs.filter(r => {
+      const p = (r.priority || '').toLowerCase();
+      return p === 'critique' || p === 'urgent';
+    });
 
-    // Background gradient simulation via two rects
-    doc.rect(0, 0, w, 260).fill(COLORS.primary);
-    doc.rect(0, 260, w, h - 260).fill(COLORS.light);
+    // Points forts: ce qui va bien
+    const ssl = this.data.ssl || {};
+    const seo = this.data.seo || {};
+    const sh = this.data.securityHeaders || {};
 
-    // Logo / Brand
-    doc.y = 60;
-    doc.fontSize(36).font('Helvetica-Bold').fillColor(COLORS.white)
-      .text('SCANOO', m, 60, { align: 'center' });
-    doc.fontSize(12).font('Helvetica').fillColor('#94B8E0')
-      .text('Le médecin de votre visibilité en ligne', m, 105, { align: 'center' });
+    const strengths = [];
+    if (ssl.valid && ssl.daysLeft > 30) strengths.push('Certificat SSL valide et securise');
+    if (seo.title && seo.title.length >= 20 && seo.title.length <= 70) strengths.push('Balise Title bien optimisee');
+    if (seo.viewport) strengths.push('Site configure pour les mobiles (viewport present)');
+    if (seo.canonical) strengths.push('URL canonique definie');
+    if (seo.lang) strengths.push('Langue du site declaree correctement');
+    if ((sh.score || 0) >= (sh.maxScore || 7) * 0.5) strengths.push('En-tetes de securite partiellement configures');
+    if ((this.data.brokenLinks?.broken?.length || 0) === 0 && (this.data.brokenLinks?.checked || 0) > 0) {
+      strengths.push('Aucun lien casse detecte');
+    }
 
-    // Divider
-    doc.moveTo(m + 40, 135).lineTo(w - m - 40, 135).strokeColor('#FFFFFF').lineWidth(0.5).stroke();
+    const top3strengths = strengths.slice(0, 3);
+    if (top3strengths.length === 0) top3strengths.push('Audit realise avec succes');
 
-    // Report Title
-    doc.fontSize(16).font('Helvetica-Bold').fillColor(COLORS.white)
-      .text('RAPPORT D\'AUDIT DE PRÉSENCE EN LIGNE', m, 150, { align: 'center' });
+    // Problemes urgents: top 3 recommandations critiques
+    const top3issues = critiques.slice(0, 3);
+    if (top3issues.length === 0) {
+      // Prendre les 3 premieres recommandations quelconques
+      top3issues.push(...recs.slice(0, 3));
+    }
 
-    doc.fontSize(11).font('Helvetica').fillColor('#94B8E0')
-      .text(this.data.meta?.url || '', m, 180, { align: 'center' });
+    // Points forts
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(C.dark)
+      .text('Points forts', M, doc.y);
+    doc.y += 16;
 
-    doc.fontSize(10).fillColor('#AABFDA')
-      .text(`Généré le ${formatDate(this.data.meta?.auditedAt)}`, m, 205, { align: 'center' });
+    top3strengths.forEach(txt => {
+      const lineY = doc.y;
+      this.statusCircle(M + 4, lineY, 'ok');
+      doc.font('Helvetica').fontSize(10).fillColor(C.dark)
+        .text(txt, M + 16, lineY, { width: CW - 16 });
+      doc.y += 18;
+    });
 
-    // Score Box
-    const score = this.data.score;
-    const boxW = 200;
-    const boxX = (w - boxW) / 2;
-    const boxY = 300;
+    doc.y += 10;
 
-    doc.roundedRect(boxX, boxY, boxW, 130, 12).fill(COLORS.white);
-    doc.roundedRect(boxX, boxY, boxW, 130, 12).strokeColor(COLORS.border).lineWidth(1).stroke();
+    // Problemes urgents
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(C.dark)
+      .text('Problemes urgents', M, doc.y);
+    doc.y += 16;
 
-    const pct = Math.round((score.total / score.max) * 100);
-    const color = scoreColor(score.total, score.max);
-    const label = scoreLabel(score.total, score.max);
-
-    doc.fontSize(11).font('Helvetica').fillColor(COLORS.medium)
-      .text('SCORE GLOBAL', boxX, boxY + 18, { width: boxW, align: 'center' });
-
-    doc.fontSize(56).font('Helvetica-Bold').fillColor(color)
-      .text(score.total.toString(), boxX, boxY + 34, { width: boxW, align: 'center' });
-
-    doc.fontSize(14).font('Helvetica').fillColor(COLORS.medium)
-      .text(`/ ${score.max}`, boxX, boxY + 96, { width: boxW, align: 'center' });
-
-    // Score bar
-    const barX = boxX + 20;
-    const barY = boxY + 118;
-    const barW = boxW - 40;
-    const barH = 6;
-    doc.roundedRect(barX, barY, barW, barH, 3).fill(COLORS.border);
-    doc.roundedRect(barX, barY, barW * (score.total / score.max), barH, 3).fill(color);
-
-    // Score breakdown mini
-    let bY = boxY + 150;
-    if (score.breakdown) {
-      Object.entries(score.breakdown).forEach(([key, s]) => {
-        const col = scoreColor(s.score, s.max);
-        const bW = (s.score / s.max) * (this.contentWidth / 2 - 20);
-
-        doc.fontSize(9).font('Helvetica').fillColor(COLORS.dark)
-          .text(s.label, m, bY, { width: 90 });
-        doc.fontSize(9).font('Helvetica-Bold').fillColor(col)
-          .text(`${s.score}/${s.max}`, m + 95, bY, { width: 40 });
-
-        const miniBarX = m + 140;
-        const miniBarW = this.contentWidth - 140;
-        doc.roundedRect(miniBarX, bY + 2, miniBarW, 5, 2).fill(COLORS.border);
-        doc.roundedRect(miniBarX, bY + 2, miniBarW * (s.score / s.max), 5, 2).fill(col);
-
-        bY += 22;
+    if (top3issues.length === 0) {
+      const lineY = doc.y;
+      this.statusCircle(M + 4, lineY, 'ok');
+      doc.font('Helvetica').fontSize(10).fillColor(C.dark)
+        .text('Aucun probleme critique identifie', M + 16, lineY, { width: CW - 16 });
+      doc.y += 18;
+    } else {
+      top3issues.forEach(rec => {
+        const lineY = doc.y;
+        this.statusCircle(M + 4, lineY, 'error');
+        doc.font('Helvetica').fontSize(10).fillColor(C.dark)
+          .text(rec.action || rec.category || 'Probleme detecte', M + 16, lineY, { width: CW - 16 });
+        doc.y += 18;
       });
     }
 
-    // Footer on cover
-    doc.rect(0, h - 50, w, 50).fill(COLORS.primary);
-    doc.fontSize(9).font('Helvetica').fillColor(COLORS.medium)
-      .text('contact@scanoo.fr  |  scanoo.fr', m, h - 32, { align: 'center' });
+    doc.y += 20;
+
+    // Legende des couleurs
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(C.dark)
+      .text('Legende des scores', M, doc.y);
+    doc.y += 14;
+
+    const legend = [
+      { color: C.red,    label: '0 - 40', desc: 'Critique - Action immediate requise' },
+      { color: C.orange, label: '40 - 70', desc: 'A ameliorer - Attention recommandee' },
+      { color: C.green,  label: '70 - 100', desc: 'Bon - Maintenir ce niveau' },
+    ];
+
+    legend.forEach(({ color, label, desc }) => {
+      const ly = doc.y;
+      doc.circle(M + 6, ly + 5, 6).fill(color);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(color)
+        .text(label, M + 18, ly, { width: 55, continued: false });
+      doc.font('Helvetica').fontSize(9).fillColor(C.dark)
+        .text(desc, M + 78, ly, { width: CW - 78 });
+      doc.y += 18;
+    });
   }
 
-  // ─── Section Header ──────────────────────────────────────────────────────
-
-  addSectionHeader(title, emoji = '') {
-    this.checkPageBreak(60);
+  // ─── HEADER DE SECTION ─────────────────────────────────────────────────────
+  sectionHeader(title) {
+    this.maybeNewPage(60);
     const doc = this.doc;
+    const M = this.M;
+    const CW = this.CW;
     const y = doc.y + 10;
 
-    doc.rect(this.margin, y, this.contentWidth, 36).fill(COLORS.primary);
-    doc.roundedRect(this.margin, y, 5, 36, 2).fill(COLORS.secondary);
+    doc.rect(M, y, CW, 34).fill(C.primary);
+    doc.rect(M, y, 4, 34).fill(C.blue);
 
-    doc.fontSize(13).font('Helvetica-Bold').fillColor(COLORS.white)
-      .text(`${emoji}  ${title}`, this.margin + 18, y + 11, { width: this.contentWidth - 20 });
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(C.white)
+      .text(title, M + 14, y + 10, { width: CW - 20 });
 
-    doc.y = y + 46;
+    doc.y = y + 44;
   }
 
-  // ─── Row ────────────────────────────────────────────────────────────────
-
-  addRow(label, value, status = null, detail = null) {
-    this.checkPageBreak(40);
+  // ─── LIGNE DE DETAIL ───────────────────────────────────────────────────────
+  detailRow(label, value, status, detail, rowIdx) {
+    this.maybeNewPage(30);
     const doc = this.doc;
+    const M = this.M;
+    const CW = this.CW;
     const y = doc.y;
-    const col = status ? statusColor(status) : COLORS.dark;
 
-    // Alternating background
-    if (this._rowIndex % 2 === 0) {
-      doc.rect(this.margin, y - 4, this.contentWidth, 28).fill('#F8FAFC');
+    if (rowIdx % 2 === 0) {
+      doc.rect(M, y - 2, CW, detail ? 32 : 22).fill(C.light);
     }
-    this._rowIndex = (this._rowIndex || 0) + 1;
 
-    const ic = status ? icon(status) : '  ';
-    doc.fontSize(10).font('Helvetica').fillColor(col)
-      .text(ic, this.margin + 6, y, { width: 20 });
+    if (status) {
+      this.statusCircle(M + 6, y, status);
+    }
 
-    doc.fontSize(10).font('Helvetica').fillColor(COLORS.dark)
-      .text(label, this.margin + 28, y, { width: 180 });
+    const labelX = status ? M + 18 : M + 6;
+    doc.font('Helvetica').fontSize(9.5).fillColor(C.dark)
+      .text(label, labelX, y, { width: 180 });
 
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(col)
-      .text(value || 'N/A', this.margin + 215, y, { width: this.contentWidth - 220 });
+    const valColor = status === 'ok' ? C.green : status === 'error' ? C.red : status === 'warn' ? C.orange : C.dark;
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(valColor)
+      .text(String(value || 'N/A'), M + 210, y, { width: CW - 215 });
 
     if (detail) {
-      doc.fontSize(8).font('Helvetica').fillColor(COLORS.medium)
-        .text(detail, this.margin + 28, y + 13, { width: this.contentWidth - 40 });
-      doc.y = y + 26;
+      doc.font('Helvetica').fontSize(8).fillColor(C.muted)
+        .text(String(detail), labelX, y + 14, { width: CW - 20 });
+      doc.y = y + 30;
     } else {
       doc.y = y + 22;
     }
   }
 
-  // ─── Section: SSL ───────────────────────────────────────────────────────
-
-  addSSLSection() {
-    this.addSectionHeader('Sécurité HTTPS / SSL', '🔒');
-    this._rowIndex = 0;
+  // ─── SECTION SSL ───────────────────────────────────────────────────────────
+  buildSSL() {
+    this.sectionHeader('Securite SSL');
     const ssl = this.data.ssl || {};
+    let idx = 0;
 
-    if (ssl.error && !ssl.valid) {
-      this.addRow('HTTPS activé', 'Non', 'error', ssl.error);
+    if (!ssl.valid) {
+      this.detailRow('HTTPS / SSL', 'Non securise', 'error', ssl.error || 'Certificat invalide ou absent', idx++);
     } else {
-      this.addRow('HTTPS activé', ssl.valid ? 'Oui' : 'Non', ssl.valid ? 'ok' : 'error');
-      if (ssl.valid) {
-        this.addRow('Certificat valide jusqu\'au', ssl.expiresAt ? formatDate(ssl.expiresAt) : 'N/A',
-          ssl.daysLeft > 30 ? 'ok' : ssl.daysLeft > 0 ? 'warn' : 'error',
-          ssl.daysLeft > 0 ? `${ssl.daysLeft} jours restants` : null);
-        this.addRow('Autorité de certification', ssl.issuer || 'N/A', 'ok');
-      }
+      this.detailRow('HTTPS active', 'Oui', 'ok', null, idx++);
+      const daysStatus = (ssl.daysLeft || 0) > 30 ? 'ok' : (ssl.daysLeft || 0) > 0 ? 'warn' : 'error';
+      this.detailRow('Expire le', formatDate(ssl.expiresAt), daysStatus,
+        ssl.daysLeft != null ? ssl.daysLeft + ' jours restants' : null, idx++);
+      if (ssl.issuer) this.detailRow('Autorite (CA)', trunc(ssl.issuer, 60), 'ok', null, idx++);
     }
     this.doc.y += 10;
   }
 
-  // ─── Section: Performance ───────────────────────────────────────────────
-
-  addPerformanceSection() {
-    this.addSectionHeader('Vitesse de chargement', '⚡');
-    this._rowIndex = 0;
+  // ─── SECTION VITESSE ───────────────────────────────────────────────────────
+  buildSpeed() {
+    this.sectionHeader('Vitesse de chargement');
     const ps = this.data.pageSpeed;
+    let idx = 0;
 
-    if (!ps || (ps.error && !ps.mobile && !ps.desktop)) {
-      this.addRow('PageSpeed Insights', 'Données indisponibles', 'warn', ps?.error || '');
-      this.doc.y += 10;
+    // Detecter si les donnees sont N/A ou absentes
+    const mobileNA = !ps || !ps.mobile || ps.mobile.fcp === 'N/A' || ps.mobile.performance === null;
+    const desktopNA = !ps || !ps.desktop || ps.desktop.fcp === 'N/A' || ps.desktop.performance === null;
+
+    if (mobileNA && desktopNA) {
+      this.maybeNewPage(50);
+      this.doc.font('Helvetica').fontSize(10).fillColor(C.muted)
+        .text(
+          'Nous n\'avons pas pu mesurer la vitesse de ce site. Testez manuellement sur pagespeed.web.dev',
+          this.M, this.doc.y + 4, { width: this.CW }
+        );
+      this.doc.y += 30;
       return;
     }
 
-    const strategies = [
-      { label: 'Mobile', data: ps.mobile },
-      { label: 'Desktop', data: ps.desktop },
-    ];
+    const renderDevice = (label, d) => {
+      if (!d || d.fcp === 'N/A' || d.performance === null) {
+        this.detailRow('Performance ' + label, 'Donnees indisponibles', 'warn', null, idx++);
+        return;
+      }
+      const perfStatus = d.performance >= 70 ? 'ok' : d.performance >= 40 ? 'warn' : 'error';
+      this.detailRow('Performance ' + label, d.performance + '/100', perfStatus,
+        'FCP: ' + d.fcp + '  |  LCP: ' + d.lcp + '  |  CLS: ' + d.cls, idx++);
+      if (d.seo != null) this.detailRow('SEO Lighthouse ' + label, d.seo + '/100', d.seo >= 70 ? 'ok' : 'warn', null, idx++);
+      if (d.accessibility != null) this.detailRow('Accessibilite ' + label, d.accessibility + '/100', d.accessibility >= 70 ? 'ok' : 'warn', null, idx++);
+    };
 
-    strategies.forEach(({ label, data: d }) => {
-      if (!d) return;
-      const perfStatus = d.performance >= 75 ? 'ok' : d.performance >= 50 ? 'warn' : 'error';
-      this.addRow(`Performance ${label}`, `${d.performance}/100`, perfStatus,
-        `FCP: ${d.fcp}  |  LCP: ${d.lcp}  |  CLS: ${d.cls}  |  TTI: ${d.tti}`);
-      this.addRow(`SEO Lighthouse ${label}`, `${d.seo}/100`, d.seo >= 75 ? 'ok' : 'warn');
-      this.addRow(`Accessibilité ${label}`, `${d.accessibility}/100`, d.accessibility >= 75 ? 'ok' : 'warn');
-      this.addRow(`Bonnes pratiques ${label}`, `${d.bestPractices}/100`, d.bestPractices >= 75 ? 'ok' : 'warn');
-      this.addRow('Compression texte', d.textCompression ? 'Activée' : 'Non activée',
-        d.textCompression ? 'ok' : 'warn');
-      this.addRow('Optimisation images', d.imageOptimization ? 'Bonne' : 'À améliorer',
-        d.imageOptimization ? 'ok' : 'warn');
-    });
+    if (!mobileNA) renderDevice('Mobile', ps.mobile);
+    if (!desktopNA) renderDevice('Desktop', ps.desktop);
 
     this.doc.y += 10;
   }
 
-  // ─── Section: SEO ───────────────────────────────────────────────────────
-
-  addSEOSection() {
-    this.addSectionHeader('SEO — Référencement naturel', '🔍');
-    this._rowIndex = 0;
+  // ─── SECTION SEO ───────────────────────────────────────────────────────────
+  buildSEO() {
+    this.sectionHeader('SEO - Referencement naturel');
     const seo = this.data.seo || {};
+    let idx = 0;
 
     if (seo.error) {
-      this.addRow('Analyse SEO', 'Erreur lors de l\'analyse', 'error', seo.error);
+      this.detailRow('Analyse SEO', 'Erreur', 'error', seo.error, idx++);
       this.doc.y += 10;
       return;
     }
 
-    // Title
-    const titleStatus = seo.title
-      ? (seo.title.length >= 20 && seo.title.length <= 70 ? 'ok' : 'warn')
-      : 'error';
-    this.addRow('Balise Title', seo.title ? `${seo.title.length} car.` : 'Absente',
-      titleStatus, truncate(seo.title, 70));
+    const titleSt = seo.title ? (seo.titleLength >= 20 && seo.titleLength <= 70 ? 'ok' : 'warn') : 'error';
+    this.detailRow('Balise Title', seo.title ? seo.titleLength + ' car.' : 'Absente', titleSt, trunc(seo.title, 70), idx++);
 
-    // Description
-    const descStatus = seo.description
-      ? (seo.description.length >= 50 && seo.description.length <= 160 ? 'ok' : 'warn')
-      : 'error';
-    this.addRow('Méta Description', seo.description ? `${seo.description.length} car.` : 'Absente',
-      descStatus, truncate(seo.description, 80));
+    const descSt = seo.description ? (seo.descriptionLength >= 50 && seo.descriptionLength <= 160 ? 'ok' : 'warn') : 'error';
+    this.detailRow('Meta Description', seo.description ? seo.descriptionLength + ' car.' : 'Absente', descSt, trunc(seo.description, 80), idx++);
 
-    // H1
-    const h1Status = seo.h1?.length === 1 ? 'ok' : seo.h1?.length > 1 ? 'warn' : 'error';
-    this.addRow('Balise H1', seo.h1?.length > 0 ? `${seo.h1.length} trouvée(s)` : 'Absente',
-      h1Status, seo.h1?.[0] ? truncate(seo.h1[0], 60) : null);
+    const h1Count = Array.isArray(seo.h1) ? seo.h1.length : (seo.h1 ? 1 : 0);
+    const h1St = h1Count === 1 ? 'ok' : h1Count > 1 ? 'warn' : 'error';
+    this.detailRow('Balise H1', h1Count + ' trouvee(s)', h1St, Array.isArray(seo.h1) && seo.h1[0] ? trunc(seo.h1[0], 60) : null, idx++);
 
-    // Alt
-    const altStatus = seo.images?.withoutAlt === 0 ? 'ok'
-      : seo.images?.withoutAlt > 0 ? 'warn' : 'ok';
-    this.addRow('Images avec alt',
-      `${(seo.images?.total || 0) - (seo.images?.withoutAlt || 0)} / ${seo.images?.total || 0}`,
-      altStatus,
-      seo.images?.withoutAlt > 0 ? `${seo.images.withoutAlt} image(s) sans attribut alt` : null);
+    this.detailRow('URL Canonical', seo.canonical ? 'Presente' : 'Absente', seo.canonical ? 'ok' : 'warn', seo.canonical ? trunc(seo.canonical, 60) : null, idx++);
+    this.detailRow('Langue declaree', seo.lang || 'Non definie', seo.lang ? 'ok' : 'warn', null, idx++);
+    this.detailRow('Viewport mobile', seo.viewport ? 'Present' : 'Absent', seo.viewport ? 'ok' : 'error', null, idx++);
 
-    // Canonical
-    this.addRow('Balise Canonical', seo.canonical || 'Absente',
-      seo.canonical ? 'ok' : 'warn', seo.canonical ? truncate(seo.canonical, 60) : null);
+    const imgs = seo.images || {};
+    const imgTotal = imgs.total || 0;
+    const imgNoAlt = imgs.withoutAlt || 0;
+    const imgSt = imgNoAlt === 0 ? 'ok' : imgNoAlt <= 2 ? 'warn' : 'error';
+    this.detailRow('Images avec alt', (imgTotal - imgNoAlt) + ' / ' + imgTotal, imgSt,
+      imgNoAlt > 0 ? imgNoAlt + ' image(s) sans attribut alt' : null, idx++);
 
-    // Lang
-    this.addRow('Langue déclarée', seo.lang || 'Non définie', seo.lang ? 'ok' : 'warn');
+    const sdCount = Array.isArray(seo.structuredData) ? seo.structuredData.length : 0;
+    this.detailRow('Donnees structurees (schema.org)', sdCount > 0 ? sdCount + ' bloc(s)' : 'Absentes', sdCount > 0 ? 'ok' : 'warn', null, idx++);
 
-    // Structured data
-    const sdCount = seo.structuredData?.length || 0;
-    const sdTypes = seo.structuredData?.map(s => s['@type']).filter(Boolean).join(', ');
-    this.addRow('Données structurées (schema.org)',
-      sdCount > 0 ? `${sdCount} bloc(s)` : 'Absentes',
-      sdCount > 0 ? 'ok' : 'warn',
-      sdTypes || null);
-
-    // Mots
-    this.addRow('Nombre de mots', seo.wordCount > 300 ? `${seo.wordCount} mots` : `${seo.wordCount} mots (trop peu)`,
-      seo.wordCount >= 300 ? 'ok' : 'warn');
-
-    // HTTP Status
-    this.addRow('Statut HTTP', `${seo.httpStatus || 'N/A'}`,
-      seo.httpStatus === 200 ? 'ok' : 'error');
+    const words = seo.wordCount || 0;
+    this.detailRow('Nombre de mots', words + ' mots', words >= 300 ? 'ok' : 'warn', null, idx++);
 
     this.doc.y += 10;
   }
 
-  // ─── Section: Mobile ────────────────────────────────────────────────────
-
-  addMobileSection() {
-    this.addSectionHeader('Compatibilité Mobile', '📱');
-    this._rowIndex = 0;
+  // ─── SECTION MOBILE ────────────────────────────────────────────────────────
+  buildMobile() {
+    this.sectionHeader('Compatibilite Mobile');
     const seo = this.data.seo || {};
     const ps = this.data.pageSpeed;
+    let idx = 0;
 
-    this.addRow('Viewport configuré', seo.viewport ? 'Oui' : 'Non',
-      seo.viewport ? 'ok' : 'error', seo.viewport || null);
+    this.detailRow('Viewport configure', seo.viewport ? 'Oui' : 'Non', seo.viewport ? 'ok' : 'error', seo.viewport || null, idx++);
 
-    if (ps?.mobile) {
-      this.addRow('Score mobile PageSpeed', `${ps.mobile.performance}/100`,
-        ps.mobile.performance >= 75 ? 'ok' : ps.mobile.performance >= 50 ? 'warn' : 'error');
-      this.addRow('Mobile-friendly (Google)', ps.mobile.mobileFriendly ? 'Oui' : 'Non',
-        ps.mobile.mobileFriendly ? 'ok' : 'error');
+    if (ps && ps.mobile && ps.mobile.performance !== null && ps.mobile.fcp !== 'N/A') {
+      const mSt = ps.mobile.performance >= 70 ? 'ok' : ps.mobile.performance >= 40 ? 'warn' : 'error';
+      this.detailRow('Score mobile PageSpeed', ps.mobile.performance + '/100', mSt, null, idx++);
     }
 
     this.doc.y += 10;
   }
 
-  // ─── Section: Security Headers ──────────────────────────────────────────
-
-  addSecuritySection() {
-    this.addSectionHeader('En-têtes de sécurité HTTP', '🛡️');
-    this._rowIndex = 0;
+  // ─── SECTION HEADERS SECURITE ──────────────────────────────────────────────
+  buildSecurityHeaders() {
+    this.sectionHeader('En-tetes de securite HTTP');
     const sh = this.data.securityHeaders || {};
     const checks = sh.checks || {};
-    const values = sh.values || {};
+    let idx = 0;
 
-    const headerMap = [
+    if (sh.error) {
+      this.detailRow('Analyse headers', 'Erreur', 'warn', sh.error, idx++);
+      this.doc.y += 10;
+      return;
+    }
+
+    const headers = [
       { key: 'strictTransportSecurity', label: 'HSTS (Strict-Transport-Security)' },
-      { key: 'xFrameOptions',           label: 'X-Frame-Options (anti-clickjacking)' },
+      { key: 'xFrameOptions',           label: 'X-Frame-Options' },
       { key: 'xContentTypeOptions',     label: 'X-Content-Type-Options' },
       { key: 'contentSecurityPolicy',   label: 'Content-Security-Policy' },
       { key: 'referrerPolicy',          label: 'Referrer-Policy' },
       { key: 'permissionsPolicy',       label: 'Permissions-Policy' },
-      { key: 'xXssProtection',          label: 'X-XSS-Protection' },
     ];
 
-    if (sh.error) {
-      this.addRow('Headers', 'Erreur d\'analyse', 'error', sh.error);
-    } else {
-      headerMap.forEach(({ key, label }) => {
-        this.addRow(label, checks[key] ? 'Présent' : 'Absent',
-          checks[key] ? 'ok' : (key === 'contentSecurityPolicy' ? 'warn' : 'warn'));
-      });
+    headers.forEach(({ key, label }) => {
+      const present = !!checks[key];
+      this.detailRow(label, present ? 'Present' : 'Absent', present ? 'ok' : 'warn', null, idx++);
+    });
 
-      if (values.server) {
-        this.addRow('Serveur web', values.server, null);
-      }
-      if (values.poweredBy) {
-        this.addRow('Technologie (X-Powered-By)', values.poweredBy, 'warn',
-          'Révèle des infos techniques — mieux vaut masquer');
-      }
+    const values = sh.values || {};
+    if (values.server) {
+      this.detailRow('Serveur web', trunc(values.server, 50), null, null, idx++);
+    }
+    if (values.poweredBy) {
+      this.detailRow('X-Powered-By', trunc(values.poweredBy, 50), 'warn', 'Revele la technologie - mieux vaut masquer', idx++);
     }
 
     this.doc.y += 10;
   }
 
-  // ─── Section: Open Graph / Social ───────────────────────────────────────
+  // ─── SECTION RESEAUX SOCIAUX ───────────────────────────────────────────────
+  buildSocial() {
+    this.sectionHeader('Reseaux sociaux et Open Graph');
+    const seo = this.data.seo || {};
+    const og = seo.og || {};
+    const tw = seo.twitter || {};
+    const links = seo.socialLinks || {};
+    let idx = 0;
 
-  addSocialSection() {
-    this.addSectionHeader('Réseaux sociaux & Open Graph', '📣');
-    this._rowIndex = 0;
-    const og = this.data.seo?.og || {};
-    const tw = this.data.seo?.twitter || {};
-    const links = this.data.seo?.socialLinks || {};
+    this.detailRow('OG Title', og.title ? trunc(og.title, 55) : 'Absent', og.title ? 'ok' : 'warn', null, idx++);
+    this.detailRow('OG Description', og.description ? 'Presente' : 'Absente', og.description ? 'ok' : 'warn', null, idx++);
+    this.detailRow('OG Image', og.image ? 'Presente' : 'Absente', og.image ? 'ok' : 'error', og.image ? null : 'Sans image, le partage sera peu attractif', idx++);
+    this.detailRow('Twitter Card', tw.card || 'Absente', tw.card ? 'ok' : 'warn', null, idx++);
+    this.detailRow('Twitter Image', tw.image ? 'Presente' : 'Absente', tw.image ? 'ok' : 'warn', null, idx++);
 
-    // OG
-    this.addRow('OG Title',       og.title || 'Absent', og.title ? 'ok' : 'warn');
-    this.addRow('OG Description', og.description ? truncate(og.description) : 'Absente', og.description ? 'ok' : 'warn');
-    this.addRow('OG Image',       og.image ? 'Présente' : 'Absente', og.image ? 'ok' : 'error',
-      og.image ? truncate(og.image, 60) : 'Sans image, le partage sera peu attractif');
-    this.addRow('OG Type',        og.type || 'Absent', og.type ? 'ok' : 'warn');
-
-    // Twitter
-    this.addRow('Twitter Card',       tw.card || 'Absente', tw.card ? 'ok' : 'warn');
-    this.addRow('Twitter Image',      tw.image ? 'Présente' : 'Absente', tw.image ? 'ok' : 'warn');
-
-    // Social presence
-    this.addRow('Facebook',  links.facebook  || 'Non détecté', links.facebook  ? 'ok' : 'warn');
-    this.addRow('Instagram', links.instagram || 'Non détecté', links.instagram ? 'ok' : 'warn');
-    this.addRow('LinkedIn',  links.linkedin  || 'Non détecté', links.linkedin  ? 'ok' : 'warn');
+    this.detailRow('Facebook', links.facebook ? trunc(links.facebook, 50) : 'Non detecte', links.facebook ? 'ok' : 'warn', null, idx++);
+    this.detailRow('Instagram', links.instagram ? trunc(links.instagram, 50) : 'Non detecte', links.instagram ? 'ok' : 'warn', null, idx++);
+    this.detailRow('LinkedIn', links.linkedin ? trunc(links.linkedin, 50) : 'Non detecte', links.linkedin ? 'ok' : 'warn', null, idx++);
 
     this.doc.y += 10;
   }
 
-  // ─── Section: Technologies ──────────────────────────────────────────────
-
-  addTechSection() {
-    this.addSectionHeader('Technologies détectées', '⚙️');
-    this._rowIndex = 0;
+  // ─── SECTION TECHNOLOGIES ──────────────────────────────────────────────────
+  buildTech() {
+    this.sectionHeader('Technologies detectees');
     const tech = this.data.technologies || {};
+    let idx = 0;
 
     if (tech.error) {
-      this.addRow('Détection', 'Erreur', 'warn', tech.error);
+      this.detailRow('Detection', 'Erreur', 'warn', tech.error, idx++);
       this.doc.y += 10;
       return;
     }
 
-    this.addRow('CMS / Plateforme', tech.cms?.length > 0 ? tech.cms.join(', ') : 'Non détecté', null);
-    this.addRow('Frameworks JS',    tech.frameworks?.length > 0 ? tech.frameworks.join(', ') : 'Non détecté', null);
-    this.addRow('Analytics',        tech.analytics?.length > 0 ? tech.analytics.join(', ') : 'Aucun détecté',
-      tech.analytics?.length > 0 ? 'ok' : 'warn');
-    this.addRow('CDN / Hébergeur',  tech.cdn?.length > 0 ? tech.cdn.join(', ') : 'Non détecté', null);
-    this.addRow('Serveur web',      tech.server || 'Non divulgué',
-      !tech.server ? 'ok' : null);
+    const join = arr => (Array.isArray(arr) && arr.length > 0) ? arr.join(', ') : 'Non detecte';
+    this.detailRow('CMS / Plateforme', join(tech.cms), null, null, idx++);
+    this.detailRow('Frameworks JS', join(tech.frameworks), null, null, idx++);
+    this.detailRow('Analytics', join(tech.analytics), tech.analytics?.length > 0 ? 'ok' : 'warn', null, idx++);
+    this.detailRow('CDN / Hebergeur', join(tech.cdn), null, null, idx++);
+    this.detailRow('Serveur web', tech.server || 'Non divulgue', null, null, idx++);
 
     this.doc.y += 10;
   }
 
-  // ─── Section: Broken Links ──────────────────────────────────────────────
-
-  addBrokenLinksSection() {
-    this.addSectionHeader('Liens vérifiés', '🔗');
-    this._rowIndex = 0;
+  // ─── SECTION LIENS ─────────────────────────────────────────────────────────
+  buildLinks() {
+    this.sectionHeader('Liens verifies');
     const bl = this.data.brokenLinks || {};
+    let idx = 0;
 
     if (bl.error) {
-      this.addRow('Vérification', 'Erreur lors de l\'analyse', 'warn', bl.error);
+      this.detailRow('Verification', 'Erreur lors de l\'analyse', 'warn', bl.error, idx++);
       this.doc.y += 10;
       return;
     }
 
-    this.addRow('Liens internes vérifiés', `${bl.checked || 0}`, null);
-    this.addRow('Liens cassés (404)',
-      bl.broken?.length > 0 ? `${bl.broken.length} lien(s) cassé(s)` : 'Aucun',
-      bl.broken?.length > 0 ? 'error' : 'ok');
+    const brokenCount = Array.isArray(bl.broken) ? bl.broken.length : 0;
+    this.detailRow('Liens verifies', String(bl.checked || 0), null, null, idx++);
+    this.detailRow('Liens casses (404)', brokenCount > 0 ? brokenCount + ' lien(s) casse(s)' : 'Aucun', brokenCount > 0 ? 'error' : 'ok', null, idx++);
 
-    if (bl.broken?.length > 0) {
-      bl.broken.slice(0, 5).forEach(link => {
-        this.addRow('  🔴 Lien cassé', truncate(link.url, 70), 'error',
-          `Statut: ${link.status || 'Erreur réseau'}`);
-      });
+    if (brokenCount > 0) {
+      const limit = Math.min(bl.broken.length, 5);
+      for (let i = 0; i < limit; i++) {
+        const lnk = bl.broken[i];
+        this.detailRow('Lien casse', trunc(lnk.url, 65), 'error', 'Statut: ' + (lnk.status || 'Erreur reseau'), idx++);
+      }
     }
 
     this.doc.y += 10;
   }
 
-  // ─── Section: Recommandations ────────────────────────────────────────────
+  // ─── SECTION RECOMMANDATIONS ───────────────────────────────────────────────
+  buildRecommendations() {
+    this.doc.addPage();
+    this.doc.y = 50;
 
-  addRecommendationsSection() {
-    this.addSectionHeader('Actions prioritaires recommandées', '🎯');
-    const recs = this.data.recommendations || [];
     const doc = this.doc;
+    const M = this.M;
+    const CW = this.CW;
 
+    // Titre section
+    doc.font('Helvetica-Bold').fontSize(18).fillColor(C.primary)
+      .text('Recommandations', M, doc.y);
+    doc.y += 8;
+    doc.rect(M, doc.y, CW, 3).fill(C.blue);
+    doc.y += 16;
+
+    const recs = this.data.recommendations || [];
     if (recs.length === 0) {
-      doc.fontSize(11).font('Helvetica').fillColor(COLORS.accent)
-        .text('🎉 Excellent ! Aucune action critique identifiée.', this.margin, doc.y + 8);
+      doc.font('Helvetica').fontSize(11).fillColor(C.muted)
+        .text('Aucune recommandation identifiee.', M, doc.y);
       doc.y += 30;
       return;
     }
 
-    const priorityColors = {
-      'critique': COLORS.danger,
-      'urgent':   COLORS.danger,
-      'élevé':    COLORS.warning,
-      'moyen':    COLORS.secondary,
-      'faible':   COLORS.medium,
-    };
-
     recs.forEach((rec, i) => {
-      this.checkPageBreak(70);
-      const y = doc.y + 8;
-      const col = priorityColors[rec.priority] || COLORS.dark;
+      // Estimer la hauteur du bloc : titre (30) + impact (20) + solution (variable) + padding (30)
+      const solutionText = rec.solution || '';
+      const solutionEstimate = Math.ceil(solutionText.length / 80) * 12 + 40;
+      const blockHeight = 30 + 20 + solutionEstimate + 30;
 
-      // Number bubble
-      doc.circle(this.margin + 12, y + 12, 12).fill(col);
-      doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORS.white)
-        .text((i + 1).toString(), this.margin + 6, y + 6, { width: 13, align: 'center' });
-
-      // Priority badge
-      doc.roundedRect(this.margin + 32, y + 2, 70, 16, 8).fill(col);
-      doc.fontSize(8).font('Helvetica-Bold').fillColor(COLORS.white)
-        .text(rec.priority.toUpperCase(), this.margin + 32, y + 5, { width: 70, align: 'center' });
-
-      // Category
-      doc.fontSize(8).font('Helvetica').fillColor(COLORS.medium)
-        .text(rec.category, this.margin + 112, y + 5, { width: 80 });
-
-      // Action text
-      doc.fontSize(10.5).font('Helvetica-Bold').fillColor(COLORS.dark)
-        .text(rec.action, this.margin + 32, y + 22, { width: this.contentWidth - 40 });
-
-      // Impact / Difficulty
-      doc.fontSize(8.5).font('Helvetica').fillColor(COLORS.medium)
-        .text(`Impact : ${rec.impact}   |   Difficulté : ${rec.difficulty}`,
-          this.margin + 32, y + 38, { width: this.contentWidth - 40 });
-
-      let currentY = y + 56;
-
-      // Solution détaillée
-      if (rec.solution) {
-        this.checkPageBreak(80);
-        currentY = doc.y > currentY ? doc.y : currentY;
-        
-        // Solution box background
-        const solX = this.margin + 32;
-        const solWidth = this.contentWidth - 40;
-        
-        doc.fontSize(9).font('Helvetica-Bold').fillColor('#1A7F5A')
-          .text('💡 Comment faire concrètement :', solX, currentY + 4, { width: solWidth });
-        
-        currentY = doc.y + 4;
-        this.checkPageBreak(60);
-        currentY = doc.y > currentY ? doc.y : currentY;
-        
-        // Draw solution background
-        const solText = rec.solution;
-        const solHeight = doc.heightOfString(solText, { width: solWidth - 16, fontSize: 8.5 }) + 16;
-        
-        this.checkPageBreak(solHeight + 10);
-        currentY = doc.y > currentY ? doc.y : currentY;
-        
-        doc.roundedRect(solX, currentY, solWidth, solHeight + 8, 6)
-          .fill('#F0FDF4');
-        
-        doc.fontSize(8.5).font('Helvetica').fillColor('#1E293B')
-          .text(solText, solX + 8, currentY + 6, { width: solWidth - 16 });
-        
-        currentY = doc.y + 12;
+      // Saut de page AVANT le bloc entier si ca ne tient pas
+      if (doc.y + blockHeight > this.H - this.BOTTOM_MARGIN) {
+        doc.addPage();
+        doc.y = 50;
       }
 
-      doc.y = currentY + 4;
-    });
+      const blockY = doc.y;
+      const col = priorityColor(rec.priority);
 
-    doc.y += 10;
+      // Numero + badge priorite + categorie
+      // Numero
+      doc.circle(M + 10, blockY + 10, 10).fill(col);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(C.white)
+        .text(String(i + 1), M + 4, blockY + 5, { width: 13, align: 'center' });
+
+      // Badge priorite
+      const badgeX = M + 26;
+      const badgeTxt = (rec.priority || 'moyen').toUpperCase();
+      doc.roundedRect(badgeX, blockY + 2, 68, 16, 8).fill(col);
+      doc.font('Helvetica-Bold').fontSize(8).fillColor(C.white)
+        .text(badgeTxt, badgeX, blockY + 5, { width: 68, align: 'center' });
+
+      // Categorie
+      if (rec.category) {
+        doc.font('Helvetica').fontSize(8).fillColor(C.muted)
+          .text(rec.category, M + 100, blockY + 5, { width: CW - 105 });
+      }
+
+      doc.y = blockY + 24;
+
+      // Titre du probleme
+      doc.font('Helvetica-Bold').fontSize(10.5).fillColor(C.dark)
+        .text(rec.action || 'Probleme detecte', M + 2, doc.y, { width: CW - 4 });
+      doc.y += 4;
+
+      // Impact + Difficulte
+      doc.font('Helvetica').fontSize(9).fillColor(C.muted)
+        .text('Impact: ' + (rec.impact || 'N/A') + '  |  Difficulte: ' + (rec.difficulty || 'N/A'), M + 2, doc.y, { width: CW - 4 });
+      doc.y += 14;
+
+      // Solution
+      if (solutionText) {
+        // Label "Comment faire :" en gras vert
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(C.mint)
+          .text('Comment faire :', M + 2, doc.y, { width: CW - 4 });
+        doc.y += 14;
+
+        // Fond gris solution
+        const solY = doc.y;
+        const solW = CW - 4;
+        const solTextH = doc.heightOfString(solutionText, { font: 'Helvetica', fontSize: 9, width: solW - 16 });
+        const solBoxH = solTextH + 16;
+
+        doc.roundedRect(M + 2, solY, solW, solBoxH, 5).fill(C.solutionBg);
+        doc.font('Helvetica').fontSize(9).fillColor(C.dark)
+          .text(solutionText, M + 10, solY + 8, { width: solW - 16 });
+
+        doc.y = solY + solBoxH + 10;
+      }
+
+      doc.y += 6;
+    });
   }
 
-  // ─── Footer ─────────────────────────────────────────────────────────────
+  // ─── DERNIERE PAGE : CONCLUSION ────────────────────────────────────────────
+  buildConclusion() {
+    this.doc.addPage();
+    const doc = this.doc;
+    const M = this.M;
+    const CW = this.CW;
+    doc.y = 50;
 
-  addPageFooter() {
+    // Titre
+    doc.font('Helvetica-Bold').fontSize(20).fillColor(C.primary)
+      .text('Conclusion', M, doc.y);
+    doc.y += 8;
+    doc.rect(M, doc.y, CW, 3).fill(C.mint);
+    doc.y += 20;
+
+    const recs = this.data.recommendations || [];
+    const critiques = recs.filter(r => {
+      const p = (r.priority || '').toLowerCase();
+      return p === 'critique' || p === 'urgent';
+    });
+
+    // Recapitulatif
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(C.dark)
+      .text('Recapitulatif', M, doc.y);
+    doc.y += 16;
+
+    const lines = [
+      recs.length + ' probleme(s) identifie(s), dont ' + critiques.length + ' critique(s)',
+      'Score global : ' + (this.data.score?.total || 0) + ' / ' + (this.data.score?.max || 100),
+    ];
+
+    lines.forEach(line => {
+      const ly = doc.y;
+      this.statusCircle(M + 4, ly, critiques.length > 0 ? 'warn' : 'ok');
+      doc.font('Helvetica').fontSize(10).fillColor(C.dark)
+        .text(line, M + 16, ly, { width: CW - 16 });
+      doc.y += 18;
+    });
+
+    doc.y += 20;
+
+    // Boite contact
+    const boxY = doc.y;
+    doc.roundedRect(M, boxY, CW, 100, 8).fill(C.primary);
+
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(C.white)
+      .text('Besoin d\'aide ?', M, boxY + 16, { width: CW, align: 'center' });
+
+    doc.font('Helvetica').fontSize(10).fillColor('#8BAACC')
+      .text('Contactez-nous a contact@scanoo.fr', M, boxY + 36, { width: CW, align: 'center' });
+
+    doc.font('Helvetica').fontSize(9).fillColor('#8BAACC')
+      .text('Nous recommandons un nouveau diagnostic dans 3 mois', M, boxY + 56, { width: CW, align: 'center' });
+
+    doc.moveTo(M + 60, boxY + 74).lineTo(CW - 20, boxY + 74)
+      .strokeColor(C.blue).lineWidth(0.5).stroke();
+
+    doc.font('Helvetica').fontSize(8).fillColor(C.muted)
+      .text('Rapport genere par Scanoo - scanoo.fr', M, boxY + 80, { width: CW, align: 'center' });
+  }
+
+  // ─── FOOTERS SUR TOUTES LES PAGES ─────────────────────────────────────────
+  addFooters() {
     const doc = this.doc;
     const range = doc.bufferedPageRange();
-    const start = range.start;
-    const count = range.count;
+    const total = range.count;
 
-    for (let i = start; i < start + count; i++) {
-      doc.switchToPage(i);
+    for (let i = 0; i < total; i++) {
+      doc.switchToPage(range.start + i);
       const pageNum = i + 1;
-      if (pageNum === 1) continue; // Cover has its own footer
 
-      const y = this.pageHeight - 40;
-      doc.rect(0, y, this.pageWidth, 40).fill(COLORS.primary);
+      // Skip la couverture (page 1) car elle a son propre footer
+      if (pageNum === 1) continue;
 
-      doc.fontSize(8).font('Helvetica').fillColor(COLORS.medium)
-        .text('contact@scanoo.fr  |  scanoo.fr  |  Confidentiel', this.margin, y + 12, {
-          width: this.contentWidth - 60, align: 'left',
-        });
+      const footerY = this.H - 30;
+      doc.rect(0, footerY - 4, this.W, 34).fill(C.primary);
 
-      doc.fontSize(8).font('Helvetica').fillColor(COLORS.medium)
-        .text(`Page ${pageNum}`, this.margin, y + 12, {
-          width: this.contentWidth, align: 'right',
-        });
+      doc.font('Helvetica').fontSize(7.5).fillColor(C.muted)
+        .text(
+          'contact@scanoo.fr | scanoo.fr | Confidentiel | Page ' + pageNum,
+          this.M, footerY + 4,
+          { width: this.CW, align: 'center' }
+        );
     }
   }
 
-  // ─── Generate ────────────────────────────────────────────────────────────
+  // ─── GENERATE ──────────────────────────────────────────────────────────────
+  async generate(outputPath) {
+    // Page 1: Couverture
+    this.buildCover();
 
-  generate(outputPath) {
-    const doc = this.doc;
+    // Page 2: Resume executif
+    this.buildExecutiveSummary();
 
-    // PAGE 1 — Cover
-    this.addCoverPage();
+    // Pages 3+: Sections d'analyse
+    this.doc.addPage();
+    this.doc.y = 50;
 
-    // PAGE 2+ — Content
-    doc.addPage({ margins: { top: 50, bottom: 50, left: this.margin, right: this.margin } });
-    this.addMinimalHeader();
-    doc.y = 55;
+    this.buildSSL();
+    this.buildSpeed();
+    this.buildSEO();
+    this.buildMobile();
+    this.buildSecurityHeaders();
+    this.buildSocial();
+    this.buildTech();
+    this.buildLinks();
 
-    this.addSSLSection();
-    this.addPerformanceSection();
-    this.addSEOSection();
-    this.addMobileSection();
-    this.addSecuritySection();
-    this.addSocialSection();
-    this.addTechSection();
-    this.addBrokenLinksSection();
-    this.addRecommendationsSection();
+    // Pages Recommandations
+    this.buildRecommendations();
 
-    // Footer on all pages
-    this.addPageFooter();
+    // Derniere page: Conclusion
+    this.buildConclusion();
 
-    // Stream to file
+    // Footers sur toutes les pages (apres generation)
+    this.addFooters();
+
+    // Ecriture du fichier
     return new Promise((resolve, reject) => {
-      if (outputPath) {
-        const stream = fs.createWriteStream(outputPath);
-        doc.pipe(stream);
-        stream.on('finish', () => resolve(outputPath));
-        stream.on('error', reject);
-      } else {
-        doc.pipe(process.stdout);
-        doc.on('end', resolve);
-        doc.on('error', reject);
-      }
-      doc.end();
+      const stream = fs.createWriteStream(outputPath);
+      this.doc.pipe(stream);
+      stream.on('finish', () => resolve(outputPath));
+      stream.on('error', reject);
+      doc_error_handler(this.doc, reject);
+      this.doc.end();
     });
   }
 }
 
-// ─── CLI ────────────────────────────────────────────────────────────────────
+function doc_error_handler(doc, reject) {
+  doc.on('error', reject);
+}
 
+// ─── CLI ──────────────────────────────────────────────────────────────────────
 async function main() {
-  let auditData;
   const inputArg = process.argv[2];
   const outputArg = process.argv[3];
 
-  if (inputArg && inputArg !== '-') {
-    // Read from file
-    try {
-      auditData = JSON.parse(fs.readFileSync(inputArg, 'utf8'));
-    } catch (e) {
-      console.error(`❌ Erreur de lecture du fichier ${inputArg}: ${e.message}`);
-      process.exit(1);
-    }
-  } else {
-    // Read from stdin
-    let raw = '';
-    process.stdin.setEncoding('utf8');
-    for await (const chunk of process.stdin) raw += chunk;
-    try {
-      auditData = JSON.parse(raw);
-    } catch (e) {
-      console.error('❌ JSON invalide en entrée:', e.message);
-      process.exit(1);
-    }
+  if (!inputArg) {
+    console.error('Usage: node report.js input.json output.pdf');
+    process.exit(1);
   }
 
-  const outputPath = outputArg || `audit-report-${Date.now()}.pdf`;
-  console.error(`📄 Génération du rapport PDF → ${outputPath}`);
+  let auditData;
+  try {
+    auditData = JSON.parse(fs.readFileSync(inputArg, 'utf8'));
+  } catch (e) {
+    console.error('Erreur de lecture du fichier ' + inputArg + ': ' + e.message);
+    process.exit(1);
+  }
 
-  const gen = new ScanooReport(auditData);
-  await gen.generate(outputPath);
+  const outputPath = outputArg || ('rapport-scanoo-' + Date.now() + '.pdf');
+  console.error('Generation du rapport -> ' + outputPath);
 
-  console.error(`✅ Rapport généré : ${outputPath}`);
+  const report = new ScanooReport(auditData);
+  await report.generate(outputPath);
+
+  console.error('Rapport genere : ' + outputPath);
 }
 
 main().catch(err => {
-  console.error('❌ Erreur:', err.message);
+  console.error('Erreur: ' + err.message);
   process.exit(1);
 });
 
