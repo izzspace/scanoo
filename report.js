@@ -2,6 +2,9 @@
 /**
  * Scanoo - Generateur de rapport PDF
  * Usage: node report.js input.json output.pdf
+ *
+ * Rapport redige en langage simple pour des non-techniciens
+ * (plombiers, restaurateurs, coiffeurs, etc.)
  */
 
 'use strict';
@@ -33,12 +36,6 @@ function scoreToColor(val, max) {
   return C.red;
 }
 
-function pctColor(pct) {
-  if (pct >= 70) return C.green;
-  if (pct >= 40) return C.orange;
-  return C.red;
-}
-
 function formatDate(iso) {
   if (!iso) return 'N/A';
   try {
@@ -46,7 +43,8 @@ function formatDate(iso) {
   } catch (_) { return iso; }
 }
 
-function trunc(str, n = 60) {
+function trunc(str, n) {
+  n = n || 60;
   if (!str) return 'N/A';
   str = String(str);
   return str.length > n ? str.slice(0, n) + '...' : str;
@@ -61,18 +59,49 @@ function priorityColor(p) {
   return C.muted;
 }
 
+function scoreContext(total, max) {
+  const pct = max > 0 ? (total / max) * 100 : 0;
+  if (pct >= 80) {
+    return total + '/' + max + ' — Excellent ! Ton site est bien optimise. Continue comme ca.';
+  } else if (pct >= 60) {
+    return total + '/' + max + ' — Dans la moyenne. Quelques ameliorations simples peuvent te faire passer devant tes concurrents.';
+  } else if (pct >= 40) {
+    return total + '/' + max + ' — En dessous de la moyenne. La plupart de tes concurrents font mieux. Mais la bonne nouvelle : les corrections sont simples.';
+  } else {
+    return total + '/' + max + ' — Ton site a besoin d\'attention. Plusieurs problemes importants ont ete detectes. On t\'explique tout ci-dessous.';
+  }
+}
+
+// Detecter la version PHP dans les headers ou technologies
+function detectPhpVersion(data) {
+  const sh = data.securityHeaders || {};
+  const values = sh.values || {};
+  const powered = values.poweredBy || '';
+  const match = powered.match(/PHP\/(\d+)\.(\d+)/i);
+  if (match) {
+    return { major: parseInt(match[1]), minor: parseInt(match[2]), raw: match[0] };
+  }
+  // Chercher aussi dans tech
+  const tech = data.technologies || {};
+  const server = tech.server || '';
+  const match2 = server.match(/PHP\/(\d+)\.(\d+)/i);
+  if (match2) {
+    return { major: parseInt(match2[1]), minor: parseInt(match2[2]), raw: match2[0] };
+  }
+  return null;
+}
+
 // ─── Rapport ──────────────────────────────────────────────────────────────────
 class ScanooReport {
   constructor(data) {
     this.data = data;
-    this.M = 50;         // marge gauche/droite
-    this.BOTTOM_MARGIN = 60; // espace footer
-    this.totalPages = 0;
+    this.M = 50;
+    this.BOTTOM_MARGIN = 60;
 
     this.doc = new PDFDocument({
       size: 'A4',
       margins: { top: 0, bottom: 0, left: 0, right: 0 },
-      bufferPages: true,  // IMPORTANT: permet switchToPage
+      bufferPages: true,
       info: {
         Title: 'Rapport Scanoo',
         Author: 'Scanoo',
@@ -81,10 +110,9 @@ class ScanooReport {
 
     this.W = this.doc.page.width;   // 595
     this.H = this.doc.page.height;  // 842
-    this.CW = this.W - this.M * 2; // content width
+    this.CW = this.W - this.M * 2;
   }
 
-  // Y courant
   get y() { return this.doc.y; }
   set y(v) { this.doc.y = v; }
 
@@ -98,7 +126,6 @@ class ScanooReport {
 
   // ─── Cercle de statut ──────────────────────────────────────────────────────
   statusCircle(x, y, status) {
-    // status: 'ok' | 'warn' | 'error'
     let color = C.green;
     if (status === 'warn') color = C.orange;
     if (status === 'error') color = C.red;
@@ -122,33 +149,25 @@ class ScanooReport {
     const M = this.M;
     const CW = this.CW;
 
-    // Fond haut
     doc.rect(0, 0, W, 320).fill(C.primary);
-    // Fond bas
     doc.rect(0, 320, W, H - 320).fill(C.light);
 
-    // Titre SCANOO
     doc.font('Helvetica-Bold').fontSize(52).fillColor(C.white)
       .text('SCANOO', 0, 70, { width: W, align: 'center' });
 
-    // Sous-titre
     doc.font('Helvetica').fontSize(13).fillColor('#8BAACC')
       .text('Rapport de diagnostic de presence en ligne', 0, 138, { width: W, align: 'center' });
 
-    // Ligne separatrice
     doc.moveTo(M + 60, 168).lineTo(W - M - 60, 168)
       .strokeColor(C.blue).lineWidth(1).stroke();
 
-    // URL
     const url = this.data.meta?.url || '';
     doc.font('Helvetica-Bold').fontSize(12).fillColor(C.white)
       .text(trunc(url, 70), 0, 182, { width: W, align: 'center' });
 
-    // Date
     doc.font('Helvetica').fontSize(10).fillColor('#8BAACC')
       .text('Genere le ' + formatDate(this.data.meta?.auditedAt), 0, 206, { width: W, align: 'center' });
 
-    // Boite score global
     const score = this.data.score || { total: 0, max: 100 };
     const total = score.total || 0;
     const max = score.max || 100;
@@ -170,13 +189,11 @@ class ScanooReport {
     doc.font('Helvetica').fontSize(12).fillColor(C.muted)
       .text('/ ' + max, boxX, boxY + 82, { width: boxW, align: 'center' });
 
-    // Jauge visuelle (barre arc-en-ciel sous le score)
     const gaugeX = boxX + 20;
     const gaugeY = boxY + 97;
     const gaugeW = boxW - 40;
     this.hbar(gaugeX, gaugeY, gaugeW, total, max, scoreCol);
 
-    // Sous-scores
     let subY = boxY + boxH + 24;
     const breakdown = score.breakdown || {};
     const subScores = [
@@ -202,13 +219,12 @@ class ScanooReport {
       subY += 20;
     });
 
-    // Footer couverture
     doc.rect(0, H - 44, W, 44).fill(C.primary);
     doc.font('Helvetica').fontSize(8).fillColor(C.muted)
       .text('contact@scanoo.fr | scanoo.fr | Confidentiel | Page 1', M, H - 28, { width: CW, align: 'center' });
   }
 
-  // ─── PAGE 2 : RESUME EXECUTIF ──────────────────────────────────────────────
+  // ─── PAGE 2 : RESUME ───────────────────────────────────────────────────────
   buildExecutiveSummary() {
     this.doc.addPage();
     const doc = this.doc;
@@ -216,49 +232,57 @@ class ScanooReport {
     const CW = this.CW;
     doc.y = 50;
 
-    // Titre de page
     doc.font('Helvetica-Bold').fontSize(20).fillColor(C.primary)
       .text("Ce qu'on a trouve", M, doc.y);
     doc.y += 8;
     doc.rect(M, doc.y, CW, 3).fill(C.mint);
     doc.y += 14;
 
-    // Detecter points forts et problemes
+    // Contexte du score
+    const score = this.data.score || { total: 0, max: 100 };
+    const total = score.total || 0;
+    const max = score.max || 100;
+    const scoreCol = scoreToColor(total, max);
+    const context = scoreContext(total, max);
+
+    const ctxY = doc.y;
+    doc.roundedRect(M, ctxY, CW, 36, 6).fill(C.solutionBg);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(scoreCol)
+      .text(context, M + 12, ctxY + 10, { width: CW - 24 });
+    doc.y = ctxY + 46;
+
     const recs = this.data.recommendations || [];
     const critiques = recs.filter(r => {
       const p = (r.priority || '').toLowerCase();
       return p === 'critique' || p === 'urgent';
     });
 
-    // Points forts: ce qui va bien
     const ssl = this.data.ssl || {};
     const seo = this.data.seo || {};
-    const sh = this.data.securityHeaders || {};
 
     const strengths = [];
-    if (ssl.valid && ssl.daysLeft > 30) strengths.push('Certificat SSL valide et securise');
-    if (seo.title && seo.title.length >= 20 && seo.title.length <= 70) strengths.push('Balise Title bien optimisee');
-    if (seo.viewport) strengths.push('Site configure pour les mobiles (viewport present)');
-    if (seo.canonical) strengths.push('URL canonique definie');
-    if (seo.lang) strengths.push('Langue du site declaree correctement');
-    if ((sh.score || 0) >= (sh.maxScore || 7) * 0.5) strengths.push('En-tetes de securite partiellement configures');
+    if (ssl.valid && ssl.daysLeft > 30) strengths.push('Ton site est securise (le cadenas est bien present)');
+    if (seo.title && seo.titleLength >= 20 && seo.titleLength <= 70) strengths.push('Le titre de ton site dans Google est bien configure');
+    if (seo.viewport) strengths.push('Ton site est accessible depuis un telephone');
     if ((this.data.brokenLinks?.broken?.length || 0) === 0 && (this.data.brokenLinks?.checked || 0) > 0) {
-      strengths.push('Aucun lien casse detecte');
+      strengths.push('Tous les liens de ton site fonctionnent correctement');
+    }
+    const tech = this.data.technologies || {};
+    if (tech.analytics && tech.analytics.length > 0) {
+      strengths.push('Tu suis le nombre de visiteurs de ton site');
     }
 
     const top3strengths = strengths.slice(0, 3);
     if (top3strengths.length === 0) top3strengths.push('Audit realise avec succes');
 
-    // Problemes urgents: top 3 recommandations critiques
     const top3issues = critiques.slice(0, 3);
     if (top3issues.length === 0) {
-      // Prendre les 3 premieres recommandations quelconques
       top3issues.push(...recs.slice(0, 3));
     }
 
     // Points forts
     doc.font('Helvetica-Bold').fontSize(13).fillColor(C.dark)
-      .text('Points forts', M, doc.y);
+      .text('Ce qui va bien', M, doc.y);
     doc.y += 16;
 
     top3strengths.forEach(txt => {
@@ -273,14 +297,14 @@ class ScanooReport {
 
     // Problemes urgents
     doc.font('Helvetica-Bold').fontSize(13).fillColor(C.dark)
-      .text('Problemes urgents', M, doc.y);
+      .text('Ce qui necessite ton attention', M, doc.y);
     doc.y += 16;
 
     if (top3issues.length === 0) {
       const lineY = doc.y;
       this.statusCircle(M + 4, lineY, 'ok');
       doc.font('Helvetica').fontSize(10).fillColor(C.dark)
-        .text('Aucun probleme critique identifie', M + 16, lineY, { width: CW - 16 });
+        .text('Aucun probleme urgent identifie', M + 16, lineY, { width: CW - 16 });
       doc.y += 18;
     } else {
       top3issues.forEach(rec => {
@@ -296,22 +320,22 @@ class ScanooReport {
 
     // Legende des couleurs
     doc.font('Helvetica-Bold').fontSize(11).fillColor(C.dark)
-      .text('Legende des scores', M, doc.y);
+      .text('Comment lire ce rapport', M, doc.y);
     doc.y += 14;
 
     const legend = [
-      { color: C.red,    label: '0 - 40', desc: 'Critique - Action immediate requise' },
-      { color: C.orange, label: '40 - 70', desc: 'A ameliorer - Attention recommandee' },
-      { color: C.green,  label: '70 - 100', desc: 'Bon - Maintenir ce niveau' },
+      { color: C.red,    label: 'Probleme', desc: 'A corriger rapidement - ca peut faire partir tes clients' },
+      { color: C.orange, label: 'Attention', desc: 'A ameliorer - pas urgent mais important' },
+      { color: C.green,  label: 'Bien', desc: 'Tout va bien sur ce point' },
     ];
 
     legend.forEach(({ color, label, desc }) => {
       const ly = doc.y;
       doc.circle(M + 6, ly + 5, 6).fill(color);
       doc.font('Helvetica-Bold').fontSize(9).fillColor(color)
-        .text(label, M + 18, ly, { width: 55, continued: false });
+        .text(label, M + 18, ly, { width: 60, continued: false });
       doc.font('Helvetica').fontSize(9).fillColor(C.dark)
-        .text(desc, M + 78, ly, { width: CW - 78 });
+        .text(desc, M + 84, ly, { width: CW - 84 });
       doc.y += 18;
     });
   }
@@ -333,7 +357,7 @@ class ScanooReport {
     doc.y = y + 44;
   }
 
-  // ─── LIGNE DE DETAIL ───────────────────────────────────────────────────────
+  // ─── LIGNE DE DETAIL SIMPLE ────────────────────────────────────────────────
   detailRow(label, value, status, detail, rowIdx) {
     this.maybeNewPage(30);
     const doc = this.doc;
@@ -351,11 +375,11 @@ class ScanooReport {
 
     const labelX = status ? M + 18 : M + 6;
     doc.font('Helvetica').fontSize(9.5).fillColor(C.dark)
-      .text(label, labelX, y, { width: 180 });
+      .text(label, labelX, y, { width: 195 });
 
     const valColor = status === 'ok' ? C.green : status === 'error' ? C.red : status === 'warn' ? C.orange : C.dark;
     doc.font('Helvetica-Bold').fontSize(9.5).fillColor(valColor)
-      .text(String(value || 'N/A'), M + 210, y, { width: CW - 215 });
+      .text(String(value || 'N/A'), M + 220, y, { width: CW - 225 });
 
     if (detail) {
       doc.font('Helvetica').fontSize(8).fillColor(C.muted)
@@ -366,229 +390,371 @@ class ScanooReport {
     }
   }
 
-  // ─── SECTION SSL ───────────────────────────────────────────────────────────
-  buildSSL() {
-    this.sectionHeader('Securite SSL');
+  // ─── SECTION SECURITE ─────────────────────────────────────────────────────
+  buildSecurity() {
+    this.sectionHeader('Securite de ton site');
     const ssl = this.data.ssl || {};
     let idx = 0;
 
     if (!ssl.valid) {
-      this.detailRow('HTTPS / SSL', 'Non securise', 'error', ssl.error || 'Certificat invalide ou absent', idx++);
+      this.detailRow(
+        'Le cadenas de securite',
+        'Absent — ton site n\'est pas securise',
+        'error',
+        'Sans cadenas, les navigateurs affichent un avertissement qui fait fuir les visiteurs.',
+        idx++
+      );
+      this.maybeNewPage(30);
+      const summaryY = this.doc.y;
+      this.doc.roundedRect(this.M, summaryY, this.CW, 28, 5).fill('#FEF2F2');
+      this.doc.font('Helvetica-Bold').fontSize(9.5).fillColor(C.red)
+        .text('Ton site a des problemes de securite — contacte la personne qui s\'occupe de ton site (ou ton hebergeur).',
+          this.M + 10, summaryY + 8, { width: this.CW - 20 });
+      this.doc.y = summaryY + 38;
     } else {
-      this.detailRow('HTTPS active', 'Oui', 'ok', null, idx++);
-      const daysStatus = (ssl.daysLeft || 0) > 30 ? 'ok' : (ssl.daysLeft || 0) > 0 ? 'warn' : 'error';
-      this.detailRow('Expire le', formatDate(ssl.expiresAt), daysStatus,
-        ssl.daysLeft != null ? ssl.daysLeft + ' jours restants' : null, idx++);
-      if (ssl.issuer) this.detailRow('Autorite (CA)', trunc(ssl.issuer, 60), 'ok', null, idx++);
+      this.detailRow('Le cadenas de securite', 'Ton site est securise (le cadenas est la)', 'ok', null, idx++);
+
+      const daysLeft = ssl.daysLeft != null ? ssl.daysLeft : 999;
+      const expStatus = daysLeft > 30 ? 'ok' : daysLeft > 0 ? 'warn' : 'error';
+      let expDetail = null;
+      if (daysLeft <= 30 && daysLeft > 0) {
+        expDetail = 'Ca se renouvelle normalement tout seul — si ce n\'est pas le cas, contacte ton hebergeur.';
+      }
+      this.detailRow(
+        'Le cadenas expire le',
+        formatDate(ssl.expiresAt) + (daysLeft != null ? ' (' + daysLeft + ' jours)' : ''),
+        expStatus,
+        expDetail,
+        idx++
+      );
+
+      this.maybeNewPage(30);
+      const summaryY = this.doc.y + 6;
+      this.doc.roundedRect(this.M, summaryY, this.CW, 28, 5).fill('#F0FDF4');
+      this.doc.font('Helvetica-Bold').fontSize(9.5).fillColor(C.green)
+        .text('Ton site est bien protege.',
+          this.M + 10, summaryY + 8, { width: this.CW - 20 });
+      this.doc.y = summaryY + 38;
     }
-    this.doc.y += 10;
+
+    this.doc.y += 4;
   }
 
   // ─── SECTION VITESSE ───────────────────────────────────────────────────────
   buildSpeed() {
-    this.sectionHeader('Vitesse de chargement');
+    this.sectionHeader('Vitesse de ton site');
     const ps = this.data.pageSpeed;
-    let idx = 0;
 
-    // Detecter si les donnees sont N/A ou absentes
-    const mobileNA = !ps || !ps.mobile || ps.mobile.fcp === 'N/A' || ps.mobile.performance === null;
-    const desktopNA = !ps || !ps.desktop || ps.desktop.fcp === 'N/A' || ps.desktop.performance === null;
+    const mobileData = ps && ps.mobile;
+    const mobileNA = !mobileData || mobileData.performance === null || mobileData.fcp === 'N/A' || mobileData.performance === undefined;
 
-    if (mobileNA && desktopNA) {
-      this.maybeNewPage(50);
-      this.doc.font('Helvetica').fontSize(10).fillColor(C.muted)
-        .text(
-          'Nous n\'avons pas pu mesurer la vitesse de ce site. Testez manuellement sur pagespeed.web.dev',
-          this.M, this.doc.y + 4, { width: this.CW }
-        );
-      this.doc.y += 30;
-      return;
+    this.maybeNewPage(60);
+
+    if (mobileNA) {
+      const msgY = this.doc.y + 4;
+      this.doc.roundedRect(this.M, msgY, this.CW, 52, 5).fill(C.solutionBg);
+      this.doc.circle(this.M + 10, msgY + 15, 4).fill(C.orange);
+      this.doc.font('Helvetica-Bold').fontSize(10).fillColor(C.dark)
+        .text('On n\'a pas pu mesurer la vitesse exacte de ton site.', this.M + 22, msgY + 9, { width: this.CW - 34 });
+      this.doc.font('Helvetica').fontSize(9.5).fillColor(C.muted)
+        .text('Tu peux tester toi-meme : va sur pagespeed.web.dev et tape l\'adresse de ton site.', this.M + 22, msgY + 26, { width: this.CW - 34 });
+      this.doc.y = msgY + 62;
+    } else {
+      const perf = mobileData.performance;
+      let vitesse, statusCircle;
+      let fcp = parseFloat(mobileData.fcp);
+      if (!isNaN(fcp)) {
+        if (fcp < 2) { vitesse = 'rapide'; statusCircle = 'ok'; }
+        else if (fcp < 4) { vitesse = 'correct'; statusCircle = 'warn'; }
+        else { vitesse = 'lent'; statusCircle = 'error'; }
+      } else {
+        if (perf >= 70) { vitesse = 'rapide'; statusCircle = 'ok'; }
+        else if (perf >= 40) { vitesse = 'correct'; statusCircle = 'warn'; }
+        else { vitesse = 'lent'; statusCircle = 'error'; }
+      }
+
+      let fcpText = !isNaN(fcp) ? fcp + ' secondes' : 'voir ci-dessous';
+      this.detailRow(
+        'Ton site sur telephone',
+        'S\'affiche en ' + fcpText + ' — c\'est ' + vitesse,
+        statusCircle,
+        null,
+        0
+      );
+
+      if (vitesse === 'lent') {
+        this.maybeNewPage(30);
+        const warnY = this.doc.y + 4;
+        this.doc.roundedRect(this.M, warnY, this.CW, 28, 5).fill('#FFF7ED');
+        this.doc.font('Helvetica').fontSize(9.5).fillColor(C.orange)
+          .text('Un site lent fait fuir les visiteurs. 53% des gens quittent un site qui met plus de 3 secondes a charger.',
+            this.M + 10, warnY + 8, { width: this.CW - 20 });
+        this.doc.y = warnY + 38;
+      }
     }
 
-    const renderDevice = (label, d) => {
-      if (!d || d.fcp === 'N/A' || d.performance === null) {
-        this.detailRow('Performance ' + label, 'Donnees indisponibles', 'warn', null, idx++);
-        return;
-      }
-      const perfStatus = d.performance >= 70 ? 'ok' : d.performance >= 40 ? 'warn' : 'error';
-      this.detailRow('Performance ' + label, d.performance + '/100', perfStatus,
-        'FCP: ' + d.fcp + '  |  LCP: ' + d.lcp + '  |  CLS: ' + d.cls, idx++);
-      if (d.seo != null) this.detailRow('SEO Lighthouse ' + label, d.seo + '/100', d.seo >= 70 ? 'ok' : 'warn', null, idx++);
-      if (d.accessibility != null) this.detailRow('Accessibilite ' + label, d.accessibility + '/100', d.accessibility >= 70 ? 'ok' : 'warn', null, idx++);
-    };
-
-    if (!mobileNA) renderDevice('Mobile', ps.mobile);
-    if (!desktopNA) renderDevice('Desktop', ps.desktop);
-
-    this.doc.y += 10;
+    this.doc.y += 4;
   }
 
-  // ─── SECTION SEO ───────────────────────────────────────────────────────────
-  buildSEO() {
-    this.sectionHeader('SEO - Referencement naturel');
+  // ─── SECTION GOOGLE ────────────────────────────────────────────────────────
+  buildGoogleVisibility() {
+    this.sectionHeader('Est-ce que tes clients te trouvent sur Google ?');
     const seo = this.data.seo || {};
     let idx = 0;
 
     if (seo.error) {
-      this.detailRow('Analyse SEO', 'Erreur', 'error', seo.error, idx++);
+      this.detailRow('Analyse', 'Impossible d\'analyser le site', 'warn', seo.error, idx++);
       this.doc.y += 10;
       return;
     }
 
-    const titleSt = seo.title ? (seo.titleLength >= 20 && seo.titleLength <= 70 ? 'ok' : 'warn') : 'error';
-    this.detailRow('Balise Title', seo.title ? seo.titleLength + ' car.' : 'Absente', titleSt, trunc(seo.title, 70), idx++);
+    // Titre dans Google
+    let titleStatus, titleValue, titleDetail;
+    if (!seo.title) {
+      titleStatus = 'error';
+      titleValue = 'Absent';
+      titleDetail = 'Ton site n\'a pas de titre dans Google. Les gens ne savent pas ce que tu fais.';
+    } else if (seo.titleLength < 20) {
+      titleStatus = 'warn';
+      titleValue = trunc(seo.title, 55) + ' (trop court)';
+      titleDetail = 'Le titre est trop court pour etre bien vu sur Google.';
+    } else if (seo.titleLength > 70) {
+      titleStatus = 'warn';
+      titleValue = trunc(seo.title, 55) + ' (trop long)';
+      titleDetail = 'Le titre est trop long, Google va le couper. Essaie de le raccourcir.';
+    } else {
+      titleStatus = 'ok';
+      titleValue = trunc(seo.title, 55);
+      titleDetail = null;
+    }
+    this.detailRow('Le titre de ton site dans Google', titleValue, titleStatus, titleDetail, idx++);
 
-    const descSt = seo.description ? (seo.descriptionLength >= 50 && seo.descriptionLength <= 160 ? 'ok' : 'warn') : 'error';
-    this.detailRow('Meta Description', seo.description ? seo.descriptionLength + ' car.' : 'Absente', descSt, trunc(seo.description, 80), idx++);
+    // Description dans Google
+    let descStatus, descValue, descDetail;
+    if (!seo.description) {
+      descStatus = 'warn';
+      descValue = 'Absente';
+      descDetail = 'Sans description, Google affiche n\'importe quel texte de ton site. Tu rates une occasion d\'attirer des clients.';
+    } else if (seo.descriptionLength < 50 || seo.descriptionLength > 160) {
+      descStatus = 'warn';
+      descValue = trunc(seo.description, 55) + (seo.descriptionLength > 160 ? ' (trop longue)' : ' (trop courte)');
+      descDetail = null;
+    } else {
+      descStatus = 'ok';
+      descValue = trunc(seo.description, 55);
+      descDetail = null;
+    }
+    this.detailRow('La description dans Google', descValue, descStatus, descDetail, idx++);
 
+    // Titre principal de la page (H1)
     const h1Count = Array.isArray(seo.h1) ? seo.h1.length : (seo.h1 ? 1 : 0);
-    const h1St = h1Count === 1 ? 'ok' : h1Count > 1 ? 'warn' : 'error';
-    this.detailRow('Balise H1', h1Count + ' trouvee(s)', h1St, Array.isArray(seo.h1) && seo.h1[0] ? trunc(seo.h1[0], 60) : null, idx++);
+    const h1Text = Array.isArray(seo.h1) && seo.h1[0] ? seo.h1[0] : (typeof seo.h1 === 'string' ? seo.h1 : null);
+    let h1Status, h1Value, h1Detail;
+    if (h1Count === 0) {
+      h1Status = 'warn';
+      h1Value = 'Aucun titre principal';
+      h1Detail = 'Ton site devrait avoir un grand titre qui explique ce que tu fais.';
+    } else if (h1Count > 1) {
+      h1Status = 'warn';
+      h1Value = 'Tu en as ' + h1Count + ', il en faut 1 seul';
+      h1Detail = h1Text ? 'Exemple : "' + trunc(h1Text, 50) + '"' : null;
+    } else {
+      h1Status = 'ok';
+      h1Value = h1Text ? trunc(h1Text, 50) : 'Present';
+      h1Detail = null;
+    }
+    this.detailRow('Le titre principal de ta page', h1Value, h1Status, h1Detail, idx++);
 
-    this.detailRow('URL Canonical', seo.canonical ? 'Presente' : 'Absente', seo.canonical ? 'ok' : 'warn', seo.canonical ? trunc(seo.canonical, 60) : null, idx++);
-    this.detailRow('Langue declaree', seo.lang || 'Non definie', seo.lang ? 'ok' : 'warn', null, idx++);
-    this.detailRow('Viewport mobile', seo.viewport ? 'Present' : 'Absent', seo.viewport ? 'ok' : 'error', null, idx++);
-
+    // Photos avec description
     const imgs = seo.images || {};
     const imgTotal = imgs.total || 0;
     const imgNoAlt = imgs.withoutAlt || 0;
-    const imgSt = imgNoAlt === 0 ? 'ok' : imgNoAlt <= 2 ? 'warn' : 'error';
-    this.detailRow('Images avec alt', (imgTotal - imgNoAlt) + ' / ' + imgTotal, imgSt,
-      imgNoAlt > 0 ? imgNoAlt + ' image(s) sans attribut alt' : null, idx++);
+    const imgWithAlt = imgTotal - imgNoAlt;
+    if (imgTotal > 0) {
+      let imgStatus = imgNoAlt === 0 ? 'ok' : imgNoAlt <= 2 ? 'warn' : 'error';
+      let imgDetail = imgNoAlt > 0
+        ? imgNoAlt + ' photo(s) n\'ont pas de description. Google ne peut pas les "lire".'
+        : null;
+      this.detailRow(
+        'Tes photos',
+        imgWithAlt + ' sur ' + imgTotal + ' ont une description pour Google',
+        imgStatus,
+        imgDetail,
+        idx++
+      );
+    }
 
-    const sdCount = Array.isArray(seo.structuredData) ? seo.structuredData.length : 0;
-    this.detailRow('Donnees structurees (schema.org)', sdCount > 0 ? sdCount + ' bloc(s)' : 'Absentes', sdCount > 0 ? 'ok' : 'warn', null, idx++);
-
-    const words = seo.wordCount || 0;
-    this.detailRow('Nombre de mots', words + ' mots', words >= 300 ? 'ok' : 'warn', null, idx++);
-
-    this.doc.y += 10;
+    this.doc.y += 4;
   }
 
   // ─── SECTION MOBILE ────────────────────────────────────────────────────────
   buildMobile() {
-    this.sectionHeader('Compatibilite Mobile');
+    this.sectionHeader('Ton site sur telephone');
     const seo = this.data.seo || {};
     const ps = this.data.pageSpeed;
     let idx = 0;
 
-    this.detailRow('Viewport configure', seo.viewport ? 'Oui' : 'Non', seo.viewport ? 'ok' : 'error', seo.viewport || null, idx++);
+    const hasViewport = !!seo.viewport;
+    const mobilePerf = ps && ps.mobile && ps.mobile.performance !== null ? ps.mobile.performance : null;
 
-    if (ps && ps.mobile && ps.mobile.performance !== null && ps.mobile.fcp !== 'N/A') {
-      const mSt = ps.mobile.performance >= 70 ? 'ok' : ps.mobile.performance >= 40 ? 'warn' : 'error';
-      this.detailRow('Score mobile PageSpeed', ps.mobile.performance + '/100', mSt, null, idx++);
+    let isAdapted = hasViewport;
+    // Si on a un score mobile < 40, on considere pas adapte
+    if (mobilePerf !== null && mobilePerf < 40) isAdapted = false;
+
+    if (isAdapted) {
+      this.detailRow('Ton site est adapte au telephone', 'Oui', 'ok', null, idx++);
+    } else {
+      this.detailRow(
+        'Ton site est adapte au telephone',
+        'Non — il est difficile a lire sur telephone',
+        'error',
+        '6 personnes sur 10 visitent ton site depuis leur telephone. Si c\'est illisible, ils partent.',
+        idx++
+      );
     }
 
-    this.doc.y += 10;
-  }
-
-  // ─── SECTION HEADERS SECURITE ──────────────────────────────────────────────
-  buildSecurityHeaders() {
-    this.sectionHeader('En-tetes de securite HTTP');
-    const sh = this.data.securityHeaders || {};
-    const checks = sh.checks || {};
-    let idx = 0;
-
-    if (sh.error) {
-      this.detailRow('Analyse headers', 'Erreur', 'warn', sh.error, idx++);
-      this.doc.y += 10;
-      return;
-    }
-
-    const headers = [
-      { key: 'strictTransportSecurity', label: 'HSTS (Strict-Transport-Security)' },
-      { key: 'xFrameOptions',           label: 'X-Frame-Options' },
-      { key: 'xContentTypeOptions',     label: 'X-Content-Type-Options' },
-      { key: 'contentSecurityPolicy',   label: 'Content-Security-Policy' },
-      { key: 'referrerPolicy',          label: 'Referrer-Policy' },
-      { key: 'permissionsPolicy',       label: 'Permissions-Policy' },
-    ];
-
-    headers.forEach(({ key, label }) => {
-      const present = !!checks[key];
-      this.detailRow(label, present ? 'Present' : 'Absent', present ? 'ok' : 'warn', null, idx++);
-    });
-
-    const values = sh.values || {};
-    if (values.server) {
-      this.detailRow('Serveur web', trunc(values.server, 50), null, null, idx++);
-    }
-    if (values.poweredBy) {
-      this.detailRow('X-Powered-By', trunc(values.poweredBy, 50), 'warn', 'Revele la technologie - mieux vaut masquer', idx++);
-    }
-
-    this.doc.y += 10;
+    this.doc.y += 4;
   }
 
   // ─── SECTION RESEAUX SOCIAUX ───────────────────────────────────────────────
   buildSocial() {
-    this.sectionHeader('Reseaux sociaux et Open Graph');
+    this.sectionHeader('Reseaux sociaux');
     const seo = this.data.seo || {};
     const og = seo.og || {};
-    const tw = seo.twitter || {};
-    const links = seo.socialLinks || {};
     let idx = 0;
 
-    this.detailRow('OG Title', og.title ? trunc(og.title, 55) : 'Absent', og.title ? 'ok' : 'warn', null, idx++);
-    this.detailRow('OG Description', og.description ? 'Presente' : 'Absente', og.description ? 'ok' : 'warn', null, idx++);
-    this.detailRow('OG Image', og.image ? 'Presente' : 'Absente', og.image ? 'ok' : 'error', og.image ? null : 'Sans image, le partage sera peu attractif', idx++);
-    this.detailRow('Twitter Card', tw.card || 'Absente', tw.card ? 'ok' : 'warn', null, idx++);
-    this.detailRow('Twitter Image', tw.image ? 'Presente' : 'Absente', tw.image ? 'ok' : 'warn', null, idx++);
+    this.maybeNewPage(30);
+    this.doc.font('Helvetica').fontSize(9.5).fillColor(C.muted)
+      .text('Quand quelqu\'un partage ton site sur Facebook ou WhatsApp :', this.M, this.doc.y, { width: this.CW });
+    this.doc.y += 18;
 
-    this.detailRow('Facebook', links.facebook ? trunc(links.facebook, 50) : 'Non detecte', links.facebook ? 'ok' : 'warn', null, idx++);
-    this.detailRow('Instagram', links.instagram ? trunc(links.instagram, 50) : 'Non detecte', links.instagram ? 'ok' : 'warn', null, idx++);
-    this.detailRow('LinkedIn', links.linkedin ? trunc(links.linkedin, 50) : 'Non detecte', links.linkedin ? 'ok' : 'warn', null, idx++);
+    this.detailRow('Image affichee lors du partage', og.image ? 'Oui' : 'Non — pas d\'image', og.image ? 'ok' : 'error',
+      og.image ? null : 'Sans image, le partage de ton site ne donne pas envie de cliquer.',
+      idx++);
 
-    this.doc.y += 10;
+    this.detailRow('Titre affiche lors du partage', og.title ? trunc(og.title, 50) : 'Non configure', og.title ? 'ok' : 'warn',
+      null, idx++);
+
+    this.detailRow('Description affichee lors du partage', og.description ? 'Presente' : 'Non configuree', og.description ? 'ok' : 'warn',
+      null, idx++);
+
+    // Liens reseaux sociaux
+    const links = seo.socialLinks || {};
+    if (links.facebook || links.instagram) {
+      this.doc.y += 6;
+      this.doc.font('Helvetica').fontSize(9.5).fillColor(C.muted)
+        .text('Liens vers tes reseaux sociaux detectes sur ton site :', this.M, this.doc.y, { width: this.CW });
+      this.doc.y += 14;
+      if (links.facebook) this.detailRow('Facebook', trunc(links.facebook, 50), 'ok', null, idx++);
+      if (links.instagram) this.detailRow('Instagram', trunc(links.instagram, 50), 'ok', null, idx++);
+      if (links.linkedin) this.detailRow('LinkedIn', trunc(links.linkedin, 50), 'ok', null, idx++);
+    }
+
+    this.doc.y += 4;
   }
 
-  // ─── SECTION TECHNOLOGIES ──────────────────────────────────────────────────
+  // ─── SECTION TECHNIQUE ─────────────────────────────────────────────────────
   buildTech() {
-    this.sectionHeader('Technologies detectees');
+    this.sectionHeader('Informations techniques');
     const tech = this.data.technologies || {};
+    const sh = this.data.securityHeaders || {};
+    const values = sh.values || {};
     let idx = 0;
 
     if (tech.error) {
-      this.detailRow('Detection', 'Erreur', 'warn', tech.error, idx++);
+      this.detailRow('Detection', 'Impossible d\'analyser', 'warn', tech.error, idx++);
       this.doc.y += 10;
       return;
     }
 
-    const join = arr => (Array.isArray(arr) && arr.length > 0) ? arr.join(', ') : 'Non detecte';
-    this.detailRow('CMS / Plateforme', join(tech.cms), null, null, idx++);
-    this.detailRow('Frameworks JS', join(tech.frameworks), null, null, idx++);
-    this.detailRow('Analytics', join(tech.analytics), tech.analytics?.length > 0 ? 'ok' : 'warn', null, idx++);
-    this.detailRow('CDN / Hebergeur', join(tech.cdn), null, null, idx++);
-    this.detailRow('Serveur web', tech.server || 'Non divulgue', null, null, idx++);
+    // CMS simplifie
+    const cms = tech.cms && tech.cms.length > 0 ? tech.cms.join(', ') : null;
+    if (cms) {
+      this.detailRow('Ton site est fait avec', cms, null, null, idx++);
+    } else {
+      this.detailRow('Technologie du site', 'Non identifiee', null, null, idx++);
+    }
 
-    this.doc.y += 10;
+    // Analytics
+    const hasAnalytics = tech.analytics && tech.analytics.length > 0;
+    if (hasAnalytics) {
+      this.detailRow(
+        'Suivi des visiteurs',
+        tech.analytics.join(', ') + ' installe',
+        'ok',
+        null,
+        idx++
+      );
+    } else {
+      this.detailRow(
+        'Suivi des visiteurs',
+        'Pas installe',
+        'warn',
+        'Tu ne sais pas combien de gens visitent ton site ni d\'ou ils viennent.',
+        idx++
+      );
+    }
+
+    // PHP obsolete
+    const phpVersion = detectPhpVersion(this.data);
+    if (phpVersion && phpVersion.major < 8) {
+      this.maybeNewPage(40);
+      const warnY = this.doc.y + 4;
+      this.doc.roundedRect(this.M, warnY, this.CW, 36, 5).fill('#FFF7ED');
+      this.doc.circle(this.M + 10, warnY + 18, 4).fill(C.orange);
+      this.doc.font('Helvetica-Bold').fontSize(9.5).fillColor(C.orange)
+        .text(
+          'Attention : ton site utilise une technologie obsolete (' + phpVersion.raw + '). Demande a ton hebergeur de mettre a jour gratuitement.',
+          this.M + 22, warnY + 10, { width: this.CW - 34 }
+        );
+      this.doc.y = warnY + 46;
+    }
+
+    this.doc.y += 4;
   }
 
   // ─── SECTION LIENS ─────────────────────────────────────────────────────────
   buildLinks() {
-    this.sectionHeader('Liens verifies');
+    this.sectionHeader('Les liens de ton site');
     const bl = this.data.brokenLinks || {};
     let idx = 0;
 
     if (bl.error) {
-      this.detailRow('Verification', 'Erreur lors de l\'analyse', 'warn', bl.error, idx++);
+      this.detailRow('Verification des liens', 'Impossible a verifier', 'warn', bl.error, idx++);
       this.doc.y += 10;
       return;
     }
 
+    const checked = bl.checked || 0;
     const brokenCount = Array.isArray(bl.broken) ? bl.broken.length : 0;
-    this.detailRow('Liens verifies', String(bl.checked || 0), null, null, idx++);
-    this.detailRow('Liens casses (404)', brokenCount > 0 ? brokenCount + ' lien(s) casse(s)' : 'Aucun', brokenCount > 0 ? 'error' : 'ok', null, idx++);
 
-    if (brokenCount > 0) {
+    if (checked === 0) {
+      this.detailRow('Liens verifies', 'Aucun lien a verifier', null, null, idx++);
+    } else if (brokenCount === 0) {
+      this.detailRow(
+        'On a verifie ' + checked + ' lien(s) sur ton site',
+        'Tous fonctionnent',
+        'ok',
+        null,
+        idx++
+      );
+    } else {
+      this.detailRow(
+        'On a verifie ' + checked + ' lien(s) sur ton site',
+        brokenCount + ' sont casses (ils menent nulle part)',
+        'error',
+        'Les liens casses font mauvaise impression et peuvent nuire a ton referencement Google.',
+        idx++
+      );
+
       const limit = Math.min(bl.broken.length, 5);
       for (let i = 0; i < limit; i++) {
         const lnk = bl.broken[i];
-        this.detailRow('Lien casse', trunc(lnk.url, 65), 'error', 'Statut: ' + (lnk.status || 'Erreur reseau'), idx++);
+        this.detailRow('Lien casse', trunc(lnk.url, 65), 'error', null, idx++);
       }
     }
 
-    this.doc.y += 10;
+    this.doc.y += 4;
   }
 
   // ─── SECTION RECOMMANDATIONS ───────────────────────────────────────────────
@@ -600,9 +766,8 @@ class ScanooReport {
     const M = this.M;
     const CW = this.CW;
 
-    // Titre section
     doc.font('Helvetica-Bold').fontSize(18).fillColor(C.primary)
-      .text('Recommandations', M, doc.y);
+      .text('Que faire maintenant ?', M, doc.y);
     doc.y += 8;
     doc.rect(M, doc.y, CW, 3).fill(C.blue);
     doc.y += 16;
@@ -616,12 +781,21 @@ class ScanooReport {
     }
 
     recs.forEach((rec, i) => {
-      // Estimer la hauteur du bloc : titre (30) + impact (20) + solution (variable) + padding (30)
-      const solutionText = rec.solution || '';
-      const solutionEstimate = Math.ceil(solutionText.length / 80) * 12 + 40;
+      // Nettoyer le texte des termes techniques
+      function cleanText(txt) {
+        if (!txt) return txt;
+        return txt
+          .replace(/\bwebmaster\b/gi, 'la personne qui s\'occupe de ton site (ou ton hebergeur)')
+          .replace(/\battribut alt\b/gi, 'description textuelle des photos')
+          .replace(/\battributs alt\b/gi, 'descriptions textuelles des photos');
+      }
+
+      const action = cleanText(rec.action || 'Probleme detecte');
+      const solutionText = cleanText(rec.solution || '');
+
+      const solutionEstimate = Math.ceil((solutionText || '').length / 80) * 12 + 40;
       const blockHeight = 30 + 20 + solutionEstimate + 30;
 
-      // Saut de page AVANT le bloc entier si ca ne tient pas
       if (doc.y + blockHeight > this.H - this.BOTTOM_MARGIN) {
         doc.addPage();
         doc.y = 50;
@@ -630,7 +804,6 @@ class ScanooReport {
       const blockY = doc.y;
       const col = priorityColor(rec.priority);
 
-      // Numero + badge priorite + categorie
       // Numero
       doc.circle(M + 10, blockY + 10, 10).fill(col);
       doc.font('Helvetica-Bold').fontSize(9).fillColor(C.white)
@@ -643,7 +816,6 @@ class ScanooReport {
       doc.font('Helvetica-Bold').fontSize(8).fillColor(C.white)
         .text(badgeTxt, badgeX, blockY + 5, { width: 68, align: 'center' });
 
-      // Categorie
       if (rec.category) {
         doc.font('Helvetica').fontSize(8).fillColor(C.muted)
           .text(rec.category, M + 100, blockY + 5, { width: CW - 105 });
@@ -651,24 +823,19 @@ class ScanooReport {
 
       doc.y = blockY + 24;
 
-      // Titre du probleme
       doc.font('Helvetica-Bold').fontSize(10.5).fillColor(C.dark)
-        .text(rec.action || 'Probleme detecte', M + 2, doc.y, { width: CW - 4 });
+        .text(action, M + 2, doc.y, { width: CW - 4 });
       doc.y += 4;
 
-      // Impact + Difficulte
       doc.font('Helvetica').fontSize(9).fillColor(C.muted)
         .text('Impact: ' + (rec.impact || 'N/A') + '  |  Difficulte: ' + (rec.difficulty || 'N/A'), M + 2, doc.y, { width: CW - 4 });
       doc.y += 14;
 
-      // Solution
       if (solutionText) {
-        // Label "Comment faire :" en gras vert
         doc.font('Helvetica-Bold').fontSize(9).fillColor(C.mint)
           .text('Comment faire :', M + 2, doc.y, { width: CW - 4 });
         doc.y += 14;
 
-        // Fond gris solution
         const solY = doc.y;
         const solW = CW - 4;
         const solTextH = doc.heightOfString(solutionText, { font: 'Helvetica', fontSize: 9, width: solW - 16 });
@@ -693,7 +860,6 @@ class ScanooReport {
     const CW = this.CW;
     doc.y = 50;
 
-    // Titre
     doc.font('Helvetica-Bold').fontSize(20).fillColor(C.primary)
       .text('Conclusion', M, doc.y);
     doc.y += 8;
@@ -706,13 +872,12 @@ class ScanooReport {
       return p === 'critique' || p === 'urgent';
     });
 
-    // Recapitulatif
     doc.font('Helvetica-Bold').fontSize(13).fillColor(C.dark)
       .text('Recapitulatif', M, doc.y);
     doc.y += 16;
 
     const lines = [
-      recs.length + ' probleme(s) identifie(s), dont ' + critiques.length + ' critique(s)',
+      recs.length + ' probleme(s) identifie(s), dont ' + critiques.length + ' urgent(s)',
       'Score global : ' + (this.data.score?.total || 0) + ' / ' + (this.data.score?.max || 100),
     ];
 
@@ -726,7 +891,6 @@ class ScanooReport {
 
     doc.y += 20;
 
-    // Boite contact
     const boxY = doc.y;
     doc.roundedRect(M, boxY, CW, 100, 8).fill(C.primary);
 
@@ -776,18 +940,17 @@ class ScanooReport {
     // Page 1: Couverture
     this.buildCover();
 
-    // Page 2: Resume executif
+    // Page 2: Resume
     this.buildExecutiveSummary();
 
-    // Pages 3+: Sections d'analyse
+    // Pages 3+: Sections d'analyse (en language simple)
     this.doc.addPage();
     this.doc.y = 50;
 
-    this.buildSSL();
+    this.buildSecurity();
     this.buildSpeed();
-    this.buildSEO();
+    this.buildGoogleVisibility();
     this.buildMobile();
-    this.buildSecurityHeaders();
     this.buildSocial();
     this.buildTech();
     this.buildLinks();
@@ -798,23 +961,18 @@ class ScanooReport {
     // Derniere page: Conclusion
     this.buildConclusion();
 
-    // Footers sur toutes les pages (apres generation)
+    // Footers sur toutes les pages
     this.addFooters();
 
-    // Ecriture du fichier
     return new Promise((resolve, reject) => {
       const stream = fs.createWriteStream(outputPath);
       this.doc.pipe(stream);
       stream.on('finish', () => resolve(outputPath));
       stream.on('error', reject);
-      doc_error_handler(this.doc, reject);
+      this.doc.on('error', reject);
       this.doc.end();
     });
   }
-}
-
-function doc_error_handler(doc, reject) {
-  doc.on('error', reject);
 }
 
 // ─── CLI ──────────────────────────────────────────────────────────────────────
