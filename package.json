@@ -1,0 +1,16 @@
+{
+  "name": "scanoo",
+  "version": "1.0.0",
+  "description": "Outil d'audit de présence en ligne pour TPE/PME françaises",
+  "main": "audit.js",
+  "scripts": {
+    "audit": "node audit.js",
+    "report": "node report.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "pdfkit": "^0.15.0",
+    "node-fetch": "^2.7.0"
+  }
+}
